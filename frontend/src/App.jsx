@@ -8709,6 +8709,10 @@ export default function App() {
                                           const v = String(e.target.value || "");
                                           if (v === "__manual__") {
                                             setNatOutInterfaceInputMode("manual");
+                                            setFirewallRuleModal((prev) => ({
+                                              ...prev,
+                                              draft: { ...prev.draft, outInterface: "" },
+                                            }));
                                             return;
                                           }
                                           setNatOutInterfaceInputMode("preset");
@@ -8739,6 +8743,10 @@ export default function App() {
                                           const v = String(e.target.value || "");
                                           if (v === "__manual__") {
                                             setNatToAddressInputMode("manual");
+                                            setFirewallRuleModal((prev) => ({
+                                              ...prev,
+                                              draft: { ...prev.draft, toAddress: "" },
+                                            }));
                                             return;
                                           }
                                           setNatToAddressInputMode("preset");
@@ -9640,6 +9648,10 @@ export default function App() {
                             const v = String(e.target.value || "");
                             if (v === "__manual__") {
                               setNatOutInterfaceInputMode("manual");
+                              setFirewallRuleModal((prev) => ({
+                                ...prev,
+                                draft: { ...prev.draft, outInterface: "" },
+                              }));
                               return;
                             }
                             setNatOutInterfaceInputMode("preset");
@@ -9670,6 +9682,10 @@ export default function App() {
                             const v = String(e.target.value || "");
                             if (v === "__manual__") {
                               setNatToAddressInputMode("manual");
+                              setFirewallRuleModal((prev) => ({
+                                ...prev,
+                                draft: { ...prev.draft, toAddress: "" },
+                              }));
                               return;
                             }
                             setNatToAddressInputMode("preset");
