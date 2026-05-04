@@ -2357,11 +2357,6 @@ export default function App() {
     tokenRef.current = token;
   }, [token]);
 
-  const sessionUsername = useMemo(() => {
-    if (!token) return "";
-    return parseJwtPayload(token)?.username || "";
-  }, [token]);
-
   const sessionAdminId = useMemo(() => {
     if (!token) return "";
     const sub = parseJwtPayload(token)?.sub;
@@ -2378,6 +2373,19 @@ export default function App() {
     if (!tokenExpiresAtMs) return 0;
     return Math.max(0, (tokenExpiresAtMs - sessionNow) / 1000);
   }, [tokenExpiresAtMs, sessionNow]);
+
+  const sessionProfileFullName = useMemo(
+    () => String(myAdminProfile?.fullName ?? "").trim(),
+    [myAdminProfile],
+  );
+
+  /** ФИО в шапке (не логин и не email). */
+  const sessionToolbarDisplayName = useMemo(() => {
+    if (!token) return "";
+    if (sessionProfileFullName) return sessionProfileFullName;
+    if (myAdminProfileLoading) return "…";
+    return "—";
+  }, [token, sessionProfileFullName, myAdminProfileLoading]);
 
   const selectedCert = useMemo(
     () => certificates.find((cert) => cert.id === selectedCertId) || null,
@@ -3087,6 +3095,15 @@ export default function App() {
       setMyAdminProfileLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!token) {
+      setMyAdminProfile(null);
+      setMyAdminProfileLoading(false);
+      return;
+    }
+    void loadMyAdminProfile();
+  }, [token, loadMyAdminProfile]);
 
   const submitMyAdminPasswordChange = async (e) => {
     e.preventDefault();
@@ -6163,6 +6180,8 @@ export default function App() {
 
   const logout = () => {
     setToken("");
+    setMyAdminProfile(null);
+    setMyAdminProfileLoading(false);
     setOverview(null);
     setError("");
     setEditOrganization({
@@ -6798,10 +6817,10 @@ export default function App() {
                   onClick={() => setUserToolbarMenuOpen((open) => !open)}
                 >
                   <div className="user-avatar user-avatar--toolbar" aria-hidden="true">
-                    {avatarInitials(sessionUsername)}
+                    {avatarInitials(sessionProfileFullName)}
                   </div>
                   <div className="user-meta user-meta--toolbar">
-                    <span className="user-label">Администратор</span>
+                    <span className="user-label">{sessionToolbarDisplayName}</span>
                   </div>
                 </button>
                 {userToolbarMenuOpen ? (

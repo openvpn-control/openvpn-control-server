@@ -8,7 +8,7 @@
 
 - `frontend` — панель (React + Vite)
 - `backend` — API (Express + Prisma)
-- `postgres` — база (в Docker Compose / Helm)
+- `postgres` — база (в Docker Compose)
 
 ## Быстрый старт (локально)
 
@@ -30,12 +30,12 @@ docker compose up --build
 2. **URL:** `CORS_ORIGIN`, `CSRF_TRUSTED_ORIGINS`, `ALLOWED_HOSTS` строго под ваш HTTPS-хост (учёт reverse proxy / `X-Forwarded-Host`).
 3. **HTTPS** end-to-end для доступа из недоверенных сетей.
 4. **Сеть:** по возможности ограничьте доступ к панели; порты агента на узлах — не в открытый интернет без необходимости.
-5. **Бэкапы:** PostgreSQL и каталог резервных копий панели (`docker-compose` / PVC в Helm).
+5. **Бэкапы:** PostgreSQL и каталог резервных копий панели (`docker-compose` / PVC в Kubernetes при своём развёртывании).
 6. **Обновления:** образы и зависимости.
 
-### Kubernetes (Helm)
+### Kubernetes
 
-[helm/openvpn-control/README.md](helm/openvpn-control/README.md) — пример `values-prod`, миграции, bootstrap администратора.
+Helm-чарт в этом репозитории не поставляется. Пример Compose и Helm с образами GHCR — в соседнем каталоге `openvpn-control/` (bundled deployment), если он есть в вашей копии дерева исходников.
 
 ### Где хранятся резервные копии панели
 

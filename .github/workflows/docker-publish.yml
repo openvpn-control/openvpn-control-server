@@ -1,4 +1,6 @@
 # Собирает backend и frontend и публикует образы в GitHub Container Registry (ghcr.io).
+# Тег образа = git-тег (например v1.2.3); для тегов v* дополнительно пушится :latest.
+# После push создаётся черновик GitHub Release с перечислением образов и дайджестов.
 # Опционально зеркалирует те же манифесты в Docker Hub (без повторной сборки).
 #
 # Триггеры: push тега v* или workflow_dispatch.
@@ -26,7 +28,7 @@ env:
   REGISTRY: ghcr.io
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 concurrency:
@@ -91,6 +93,8 @@ jobs:
           tags: |
             type=raw,value=${{ steps.tag.outputs.value }}
             type=raw,value=latest,enable=${{ startsWith(steps.tag.outputs.value, 'v') }}
+          flavor: |
+            latest=false
 
       - name: Build and push backend
         uses: docker/build-push-action@v6
@@ -111,6 +115,8 @@ jobs:
           tags: |
             type=raw,value=${{ steps.tag.outputs.value }}
             type=raw,value=latest,enable=${{ startsWith(steps.tag.outputs.value, 'v') }}
+          flavor: |
+            latest=false
 
       - name: Build and push frontend
         uses: docker/build-push-action@v6
@@ -139,3 +145,54 @@ jobs:
             docker buildx imagetools create --tag "${DST_BACKEND}:latest" "${SRC_BACKEND}:${TAG}"
             docker buildx imagetools create --tag "${DST_FRONTEND}:latest" "${SRC_FRONTEND}:${TAG}"
           fi
+
+      - name: Draft release (образы в GHCR)
+        if: github.event_name == 'push'
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+          IMAGE_BACKEND: ${{ env.IMAGE_BACKEND }}
+          IMAGE_FRONTEND: ${{ env.IMAGE_FRONTEND }}
+        run: |
+          set -eux
+          digest_backend="$(docker buildx imagetools inspect "${IMAGE_BACKEND}:${TAG}" | awk '/Digest:/ {print $2; exit}')"
+          digest_frontend="$(docker buildx imagetools inspect "${IMAGE_FRONTEND}:${TAG}" | awk '/Digest:/ {print $2; exit}')"
+          {
+            echo "## Образы (GHCR)"
+            echo
+            echo "Тег образов: \`${TAG}\`"
+            if [[ "${TAG}" == v* ]]; then
+              echo "Для тегов \`v*\` также обновлён тег \`latest\`."
+            fi
+            echo
+            echo "### Backend"
+            echo "- \`${IMAGE_BACKEND}:${TAG}\`"
+            echo "- digest: \`${digest_backend}\`"
+            echo
+            echo "### Frontend"
+            echo "- \`${IMAGE_FRONTEND}:${TAG}\`"
+            echo "- digest: \`${digest_frontend}\`"
+            echo
+            echo "### Пример pull"
+            echo "\`\`\`"
+            echo "docker pull ${IMAGE_BACKEND}:${TAG}"
+            echo "docker pull ${IMAGE_FRONTEND}:${TAG}"
+            echo "\`\`\`"
+          } > release-body.md
+          {
+            echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${TAG}"
+            echo "BACKEND_DIGEST=${digest_backend}"
+            echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${TAG}"
+            echo "FRONTEND_DIGEST=${digest_frontend}"
+          } > container-images.env
+
+      - name: Publish draft release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.value }}
+          name: ${{ steps.tag.outputs.value }}
+          draft: true
+          body_path: release-body.md
+          files: container-images.env
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
