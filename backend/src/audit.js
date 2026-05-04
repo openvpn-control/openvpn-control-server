@@ -51,6 +51,7 @@ function clientIp(req) {
 }
 
 export function auditAdminActions(req, res, next) {
+  if (process.env.AUDIT_ADMIN_ACTIONS_DISABLED === "1") return next();
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
   if (!req.user?.sub) return next();
 

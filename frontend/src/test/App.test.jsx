@@ -87,6 +87,12 @@ function mockApiFetch() {
     if (url.includes("/api/panel/nodes/s1/system/network")) {
       return jsonResponse({ interfaces: [{ name: "eth0", addresses: ["192.0.2.10"] }] });
     }
+    if (url.includes("/api/panel/nodes/") && url.includes("/network-info")) {
+      return jsonResponse({
+        interfaces: [{ name: "eth0" }],
+        addresses: ["192.0.2.10"],
+      });
+    }
     if (url.includes("/api/panel/nodes/s1/firewall/check")) return jsonResponse({ ok: true });
     if (url.includes("/api/panel/nodes/s1/firewall")) {
       return jsonResponse({
@@ -136,7 +142,7 @@ function mockApiFetchLoginFailure() {
 }
 
 function getFieldInputByLabelText(labelPattern) {
-  const labelNode = screen.getByText(labelPattern);
+  const labelNode = screen.getByText(labelPattern, { selector: ".user-profile-field-label" });
   const block = labelNode.closest(".user-profile-field-block");
   if (!block) return null;
   return block.querySelector("input, textarea, select");
@@ -317,17 +323,19 @@ describe("App UI", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "+ NAT" }));
+    const natDlg = await findFirewallRuleDialog();
 
-    const outInput = await screen.findByPlaceholderText("eth0");
-    const toInput = await screen.findByPlaceholderText("203.0.113.10");
-    const modal = outInput.closest(".modal-dialog");
-    const [outSelect, toSelect] = modal ? Array.from(modal.querySelectorAll("select")).slice(-2) : [null, null];
-
-    expect(outSelect).toBeTruthy();
-    expect(toSelect).toBeTruthy();
+    const outInput = await within(natDlg).findByPlaceholderText("eth0");
+    const toInput = await within(natDlg).findByPlaceholderText("203.0.113.10");
+    const selects = natDlg.querySelectorAll("select");
+    expect(selects.length).toBeGreaterThanOrEqual(3);
+    const [, outSelect, toSelect] = selects;
     expect(outInput).not.toBeDisabled();
     expect(toInput).not.toBeDisabled();
 
+    await waitFor(() => {
+      expect(outSelect.querySelector('option[value="eth0"]')).toBeTruthy();
+    });
     fireEvent.change(outSelect, { target: { value: "eth0" } });
     fireEvent.change(toSelect, { target: { value: "192.0.2.10" } });
     expect(outInput).toBeDisabled();
@@ -357,18 +365,25 @@ describe("App UI", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "+ NAT" }));
+    let natDlg = await findFirewallRuleDialog();
+    let outInput = await within(natDlg).findByPlaceholderText("eth0");
+    let toInput = await within(natDlg).findByPlaceholderText("203.0.113.10");
+    let selects = natDlg.querySelectorAll("select");
+    let [, outSelect, toSelect] = selects;
 
-    const outInput = await screen.findByPlaceholderText("eth0");
-    const toInput = await screen.findByPlaceholderText("203.0.113.10");
-    const modal = outInput.closest(".modal-dialog");
-    const [outSelect, toSelect] = modal ? Array.from(modal.querySelectorAll("select")).slice(-2) : [null, null];
-
+    await waitFor(() => {
+      expect(outSelect.querySelector('option[value="eth0"]')).toBeTruthy();
+    });
     fireEvent.change(outSelect, { target: { value: "eth0" } });
     fireEvent.change(toSelect, { target: { value: "192.0.2.10" } });
-    const saveDialog = await findFirewallRuleDialog();
-    fireEvent.click(within(saveDialog).getByRole("button", { name: "Сохранить" }));
+    fireEvent.click(within(natDlg).getByRole("button", { name: "Сохранить" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Изменить" }));
+    natDlg = await findFirewallRuleDialog();
+    outInput = await within(natDlg).findByPlaceholderText("eth0");
+    toInput = await within(natDlg).findByPlaceholderText("203.0.113.10");
+    selects = natDlg.querySelectorAll("select");
+    [, outSelect, toSelect] = selects;
     expect(outInput).toHaveValue("eth0");
     expect(toInput).toHaveValue("192.0.2.10");
     expect(outInput).toBeDisabled();
@@ -561,7 +576,7 @@ describe("App UI", () => {
     });
   });
 
-  it("OpenVPN settings: saves draft and applies selected version", async () => {
+  it("OpenVPN settings: apply sends current draft to panel", async () => {
     const fetchMock = mockApiFetch();
     localStorage.setItem("ovpn_control_admin_token", makeJwt(3600));
     global.fetch = fetchMock;
@@ -573,16 +588,8 @@ describe("App UI", () => {
       </MemoryRouter>,
     );
 
-    const saveBtn = await screen.findByRole("button", { name: "Сохранить черновик" });
-    fireEvent.click(saveBtn);
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/openvpn-settings-save"),
-        expect.objectContaining({ method: "POST" }),
-      );
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Применить" }));
+    await screen.findByRole("heading", { name: "Служба OpenVPN" });
+    fireEvent.click(await screen.findByRole("button", { name: "Применить" }));
     expect(await screen.findByText("Подтверждение применения")).toBeInTheDocument();
     const modal = screen.getByText("Подтверждение применения").closest(".modal-dialog");
     const confirmBtn = modal ? Array.from(modal.querySelectorAll("button")).find((b) => b.textContent?.trim() === "Подтвердить") : null;

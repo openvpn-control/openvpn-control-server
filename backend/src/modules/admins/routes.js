@@ -378,31 +378,35 @@ router.patch("/:id", async (req, res) => {
     return res.status(400).json({ error: "Нет данных для обновления" });
   }
 
-  const row = await prisma.admin.update({
-    where: { id },
-    data: updateData,
-    select: {
-      id: true,
-      fullName: true,
-      username: true,
-      email: true,
-      isActive: true,
-      inviteToken: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
+  try {
+    const row = await prisma.admin.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        fullName: true,
+        username: true,
+        email: true,
+        isActive: true,
+        inviteToken: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
-  return res.json({
-    id: row.id,
-    fullName: row.fullName,
-    username: row.username,
-    email: row.email,
-    isActive: row.isActive,
-    invitePending: row.inviteToken != null,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  });
+    return res.json({
+      id: row.id,
+      fullName: row.fullName,
+      username: row.username,
+      email: row.email,
+      isActive: row.isActive,
+      invitePending: row.inviteToken != null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || "Не удалось обновить администратора" });
+  }
 });
 
 export default router;
