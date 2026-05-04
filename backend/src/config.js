@@ -19,6 +19,8 @@ function parseBool(value, fallback = false) {
 }
 
 function parseAllowedHosts(raw, fallbackOrigins = []) {
+  const text = String(raw ?? "").trim();
+  if (text === "*") return [];
   const explicit = parseCorsOrigins(raw);
   if (explicit.length > 0) return explicit.map((x) => x.toLowerCase());
   const derived = fallbackOrigins

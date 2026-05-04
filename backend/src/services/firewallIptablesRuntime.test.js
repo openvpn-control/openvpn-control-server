@@ -14,7 +14,10 @@ test("renderFirewallRuntimeIptablesScript places dnat in prerouting", () => {
   });
 
   assert.match(script, /iptables -t nat -I PREROUTING 1 -j OPENVPN_PANEL_NAT_PRE/);
-  assert.match(script, /-A OPENVPN_PANEL_NAT_PRE .* -i 'eth0' .* -j DNAT --to-destination '172\.16\.10\.2'/);
+  assert.match(
+    script,
+    /iptables -t nat -A OPENVPN_PANEL_NAT_PRE -i 'eth0' -j DNAT --to-destination '172\.16\.10\.2'/,
+  );
 });
 
 test("renderFirewallRuntimeIptablesScript places snat/masquerade in postrouting", () => {
