@@ -1,0 +1,139 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+postgres:
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5432
+  database: openvpn_control
+  username: postgres
+  password: ""
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+  resources: {}
+
+backend:
+  replicas: 1
+  image:
+    repository: ovpn-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  jwtSecret: ""
+  initAdminUsername: "admin"
+  initAdminPassword: ""
+  panelBackupDir: /app/data/panel-backups
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+  env:
+    CORS_ORIGIN: "http://localhost:5173"
+    ALLOWED_HOSTS: "localhost:8080"
+    CSRF_TRUSTED_ORIGINS: "http://localhost:5173"
+    CSRF_PROTECTION_ENABLED: "true"
+    LOGIN_MAX_ATTEMPTS: "8"
+    LOGIN_LOCKOUT_MINUTES: "15"
+    MFA_PENDING_TOKEN_EXPIRES_IN: "5m"
+    AGENT_SYNC_INTERVAL_MS: "2000"
+    OPENVPN_INFO_SYNC_INTERVAL_MS: "5000"
+    CLIENT_SYNC_INTERVAL_MS: "2000"
+    CLIENT_SESSION_FRESHNESS_SECONDS: "15"
+    CLIENT_TRAFFIC_HISTORY_MINUTES: "15"
+    AGENT_METRIC_HISTORY_MINUTES: "15"
+  resources: {}
+  probes:
+    liveness:
+      path: /health
+      initialDelaySeconds: 15
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
+    readiness:
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+
+frontend:
+  replicas: 1
+  image:
+    repository: ovpn-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources: {}
+  probes:
+    liveness:
+      path: /
+      initialDelaySeconds: 15
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
+    readiness:
+      path: /
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+
+migrations:
+  enabled: true
+  backoffLimit: 3
+
+podDisruptionBudget:
+  backend:
+    enabled: true
+    minAvailable: 1
+  frontend:
+    enabled: true
+    minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  frontend:
+    # Strict profile: do not allow all ingress by default.
+    allowFromAny: false
+    # Allow ingress controller traffic to frontend.
+    ingressController:
+      enabled: true
+      namespaceSelectorLabels:
+        kubernetes.io/metadata.name: ingress-nginx
+      podSelectorLabels:
+        app.kubernetes.io/name: ingress-nginx
+    # Optional extra 'from' entries, raw NetworkPolicyPeer objects.
+    # additionalFrom:
+    #   - namespaceSelector:
+    #       matchLabels:
+    #         kubernetes.io/metadata.name: monitoring
+    additionalFrom: []
+  backend:
+    # true: allow traffic to backend only from frontend pods in same namespace
+    allowOnlyFrontend: true
+  postgres:
+    # true: allow traffic to postgres only from backend pods in same namespace
+    allowOnlyBackend: true
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: openvpn-control.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []

@@ -1,0 +1,3 @@
+ALTER TABLE "AgentNode"
+ADD COLUMN "protocol" TEXT NOT NULL DEFAULT 'http',
+ADD COLUMN "authToken" TEXT NOT NULL DEFAULT '';

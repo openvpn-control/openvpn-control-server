@@ -1,0 +1,8 @@
+ALTER TABLE "VpnUser" DROP CONSTRAINT IF EXISTS "VpnUser_organizationId_fkey";
+
+ALTER TABLE "VpnUser" ALTER COLUMN "position" DROP NOT NULL;
+ALTER TABLE "VpnUser" ALTER COLUMN "phone" DROP NOT NULL;
+ALTER TABLE "VpnUser" ALTER COLUMN "organizationId" DROP NOT NULL;
+
+ALTER TABLE "VpnUser" ADD CONSTRAINT "VpnUser_organizationId_fkey"
+  FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE SET NULL ON UPDATE CASCADE;

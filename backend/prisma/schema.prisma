@@ -1,0 +1,371 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id              String    @id @default(cuid())
+  fullName        String    @default("")
+  username        String    @unique
+  email           String?   @unique
+  passwordHash    String
+  isActive        Boolean   @default(true)
+  /// Одноразовый токен приглашения; после установки пароля сбрасывается.
+  inviteToken     String?   @unique
+  inviteExpiresAt DateTime?
+  /// Одноразовая ссылка сброса пароля (как в письме).
+  passwordResetToken     String?   @unique
+  passwordResetExpiresAt DateTime?
+  totpEnabled            Boolean   @default(false)
+  totpSecretEnc          String?
+  totpPendingSecretEnc   String?
+  totpPendingExpiresAt   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  actionLogs      AdminActionLog[]
+  totpRecoveryCodes AdminTotpRecoveryCode[]
+}
+
+/// Одноразовые резервные коды для входа при потере TOTP (хранится только хэш).
+model AdminTotpRecoveryCode {
+  id        String    @id @default(cuid())
+  adminId   String
+  codeHash  String
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, usedAt])
+}
+
+model Organization {
+  id             String   @id @default(cuid())
+  name           String
+  inn            String?
+  legalAddress   String?
+  generalDirector String?
+  phone          String?
+  email          String?
+  firewallRules  Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  vpnUsers VpnUser[]
+}
+
+model VpnUser {
+  id               String   @id @default(cuid())
+  fullName         String
+  position         String?
+  email            String   @unique
+  phone            String?
+  organizationId   String?
+  notes            String?
+  firewallRules    Json?
+  /// Директивы CCD (ifconfig-push, маршруты и т.д.) — синхронизируются на агенты через задачи panel_agent_snapshot.
+  ccdSettings      Json?
+  /// Последнее известное касание VPN (пока сессия активна — обновляется синком; после отключения остаётся ~время окончания).
+  lastVpnActivityAt DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  certificates Certificate[]
+}
+
+model AgentNode {
+  id            String   @id @default(cuid())
+  name          String
+  protocol      String   @default("http")
+  host          String
+  port          Int
+  authToken     String
+  agentVersion  String?
+  status        String   @default("UNKNOWN")
+  cpuPercent    Float    @default(0)
+  memoryPercent Float    @default(0)
+  diskPercent   Float    @default(0)
+  diskReadBps   Float    @default(0)
+  diskWriteBps  Float    @default(0)
+  networkInBps  Float    @default(0)
+  networkOutBps Float    @default(0)
+  activeClients Int      @default(0)
+  lastSeenAt    DateTime?
+  openvpnBinaryPath String?
+  openvpnVersion String?
+  openvpnBuild String?
+  openvpnConfigPath String?
+  openvpnServerLogPath String?
+  openvpnManagementAddr String?
+  openvpnRunning Boolean @default(false)
+  openvpnServiceUnit String?
+  openvpnServiceActiveState String?
+  openvpnServiceSubState String?
+  openvpnServiceMainPid Int?
+  openvpnServiceActiveSince String?
+  openvpnServiceRecentLogs Json?
+  openvpnLogsEnabled Boolean @default(false)
+  openvpnLogsNote String?
+  openvpnInfoSeenAt DateTime?
+  openvpnInfoError String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  metrics       AgentMetricSnapshot[]
+  ipHistory     ClientIpAssignment[]
+  sourceHistory ClientSourceIpHistory[]
+  trafficSamples ClientTrafficSample[]
+  certificates  Certificate[]
+  openvpnSettings AgentNodeOpenvpnSettings?
+  openvpnConfigVersions AgentNodeOpenvpnConfigVersion[]
+  openvpnMaterials AgentNodeOpenvpnMaterial[]
+  openvpnLogs OpenvpnServerLog[]
+  panelTasks    PanelAsyncTask[]
+}
+
+/// Асинхронные задачи панели (доставка CRL и др.), выполняются при синхронизации с агентом.
+model PanelAsyncTask {
+  id          String    @id @default(cuid())
+  type        String
+  status      String    @default("pending")
+  agentNodeId String
+  payload     Json
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  agentNode AgentNode @relation(fields: [agentNodeId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([agentNodeId, status])
+}
+
+model OpenvpnServerLog {
+  id          String   @id @default(cuid())
+  agentNodeId String
+  occurredAt  DateTime
+  occurredRaw String?
+  event       String
+  username    String?
+  ipAddress   String?
+  rawLine     String
+  fingerprint String   @unique
+  createdAt   DateTime @default(now())
+
+  agentNode AgentNode @relation(fields: [agentNodeId], references: [id], onDelete: Cascade)
+
+  @@index([agentNodeId, occurredAt])
+  @@index([createdAt])
+  @@index([username])
+  @@index([ipAddress])
+}
+
+model AgentNodeOpenvpnSettings {
+  id          String   @id @default(cuid())
+  agentNodeId String   @unique
+  settings    Json
+  configPath  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agentNode AgentNode @relation(fields: [agentNodeId], references: [id], onDelete: Cascade)
+}
+
+model AgentNodeOpenvpnConfigVersion {
+  id          String   @id @default(cuid())
+  agentNodeId String
+  version     Int
+  settings    Json
+  checksum    String
+  appliedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  agentNode AgentNode @relation(fields: [agentNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([agentNodeId, version])
+  @@index([agentNodeId, createdAt])
+  @@index([agentNodeId, appliedAt])
+}
+
+/// DH / tls-auth, хранимые на панели и привязанные к узлу OpenVPN (не к корневому CA).
+model AgentNodeOpenvpnMaterial {
+  id          String   @id @default(cuid())
+  agentNodeId String
+  /// "dh" | "tls_auth"
+  kind        String
+  label       String?
+  pem         String
+  createdAt   DateTime @default(now())
+
+  agentNode AgentNode @relation(fields: [agentNodeId], references: [id], onDelete: Cascade)
+
+  @@index([agentNodeId, kind])
+}
+
+model AgentMetricSnapshot {
+  id            String   @id @default(cuid())
+  agentNodeId   String
+  cpuPercent    Float    @default(0)
+  memoryPercent Float    @default(0)
+  diskPercent   Float    @default(0)
+  diskReadBps   Float    @default(0)
+  diskWriteBps  Float    @default(0)
+  networkInBps  Float    @default(0)
+  networkOutBps Float    @default(0)
+  activeClients Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  agentNode AgentNode @relation(fields: [agentNodeId], references: [id], onDelete: Cascade)
+
+  @@index([agentNodeId, createdAt])
+}
+
+model Certificate {
+  id               String   @id @default(cuid())
+  commonName       String
+  serialNumber     String   @unique
+  issuedBy         String
+  rootCaId         String?
+  agentNodeId      String?
+  vpnUserId        String?
+  /// PEM сертификата (для выгрузки на OpenVPN-сервер и т.п.); для старых записей может быть пусто.
+  certPem          String?
+  /// PEM закрытого ключа; не отдаётся в публичных API без необходимости.
+  keyPem           String?
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  revokedAt        DateTime?
+  revokedReason    String?
+
+  rootCa   RootCertificateAuthority? @relation(fields: [rootCaId], references: [id], onDelete: SetNull)
+  agentNode AgentNode?               @relation(fields: [agentNodeId], references: [id], onDelete: SetNull)
+  vpnUser   VpnUser?                  @relation(fields: [vpnUserId], references: [id], onDelete: SetNull)
+
+  @@index([commonName, agentNodeId])
+}
+
+model RootCertificateAuthority {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  commonName  String
+  certPem     String
+  keyPem      String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  certificates Certificate[]
+}
+
+model ClientIpAssignment {
+  id          String   @id @default(cuid())
+  agentNodeId String
+  sessionId   String
+  commonName  String
+  realIp      String
+  virtualIp   String
+  connectedAt String
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  /// Когда сессия пропала с агента (по порогу свежести); при повторном появлении сбрасывается.
+  endedAt     DateTime?
+
+  agentNode AgentNode @relation(fields: [agentNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([agentNodeId, sessionId])
+  @@index([commonName, firstSeenAt])
+  @@index([virtualIp, firstSeenAt])
+}
+
+model ClientSourceIpHistory {
+  id          String   @id @default(cuid())
+  agentNodeId String
+  sessionId   String
+  commonName  String
+  realIp      String
+  connectedAt String
+  /// Первая фиксация пары сессия + исходный IP на панели («дата записи»).
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  /// Когда сессия исчезла с агента (узел успешно опрошен, клиента в списке нет).
+  endedAt       DateTime?
+  /// Длительность с firstSeenAt до endedAt, секунды (заполняется при закрытии).
+  durationSeconds Int?
+
+  agentNode AgentNode @relation(fields: [agentNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([agentNodeId, sessionId, realIp])
+  @@index([commonName, firstSeenAt])
+  @@index([realIp, firstSeenAt])
+  @@index([agentNodeId, endedAt])
+}
+
+model ClientTrafficSample {
+  id          String   @id @default(cuid())
+  agentNodeId String
+  sessionId   String
+  commonName  String
+  virtualIp   String
+  realIp      String
+  rxBytes     BigInt
+  txBytes     BigInt
+  inBps       Float    @default(0)
+  outBps      Float    @default(0)
+  sampledAt   DateTime @default(now())
+
+  agentNode AgentNode @relation(fields: [agentNodeId], references: [id], onDelete: Cascade)
+
+  @@index([agentNodeId, sessionId, sampledAt])
+  @@index([commonName, sampledAt])
+}
+
+model AdminActionLog {
+  id            String   @id @default(cuid())
+  adminId       String
+  adminUsername String
+  method        String
+  path          String
+  action        String
+  targetType    String?
+  targetId      String?
+  ipAddress     String?
+  userAgent     String?
+  statusCode    Int
+  details       Json?
+  createdAt     DateTime @default(now())
+
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([adminId, createdAt])
+  @@index([targetType, targetId, createdAt])
+}
+
+/// Единственная строка настроек планировщика резервных копий (id = 1).
+model PanelAppBackupSettings {
+  id                Int      @id
+  /// Интервал автоматических копий, минуты; 0 — только вручную.
+  intervalMinutes   Int      @default(0)
+  /// Сколько последних ZIP-архивов хранить на диске.
+  retainCount       Int      @default(10)
+  lastScheduledAt   DateTime?
+  updatedAt         DateTime @updatedAt
+}
+
+/// Метаданные ZIP-резервной копии на диске панели (файл `{id}.zip`).
+model PanelAppBackup {
+  id         String   @id @default(cuid())
+  /// Имя файла для скачивания.
+  fileName   String
+  sizeBytes  Int
+  /// "manual" | "scheduled"
+  trigger    String   @default("manual")
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}

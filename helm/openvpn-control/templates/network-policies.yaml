@@ -1,0 +1,96 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openvpn-control.fullname" . }}-frontend
+  labels:
+    {{- include "openvpn-control.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "openvpn-control.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- if .Values.networkPolicy.frontend.allowFromAny }}
+    - {}
+    {{- else }}
+    - from:
+        {{- if .Values.networkPolicy.frontend.ingressController.enabled }}
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.frontend.ingressController.namespaceSelectorLabels | nindent 14 }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.frontend.ingressController.podSelectorLabels | nindent 14 }}
+        {{- end }}
+        {{- with .Values.networkPolicy.frontend.additionalFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openvpn-control.fullname" . }}-backend
+  labels:
+    {{- include "openvpn-control.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "openvpn-control.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- if .Values.networkPolicy.backend.allowOnlyFrontend }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace | quote }}
+          podSelector:
+            matchLabels:
+              {{- include "openvpn-control.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: frontend
+    {{- else }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace | quote }}
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openvpn-control.fullname" . }}-postgres
+  labels:
+    {{- include "openvpn-control.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "openvpn-control.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- if .Values.networkPolicy.postgres.allowOnlyBackend }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace | quote }}
+          podSelector:
+            matchLabels:
+              {{- include "openvpn-control.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: backend
+    {{- else }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace | quote }}
+    {{- end }}
+{{- end }}
+

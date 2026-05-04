@@ -1,0 +1,2 @@
+ALTER TABLE "VpnUser"
+ADD COLUMN IF NOT EXISTS "firewallRules" JSONB;

@@ -1,0 +1,60 @@
+export const OPENVPN_CLIENT_SETTINGS_FIELDS = [
+  {
+    key: "client",
+    label: "Client",
+    description: "Режим клиентского профиля (директива client).",
+    type: "checkbox",
+  },
+  {
+    key: "proto",
+    label: "Протокол",
+    description: "Можно фиксировать (udp/tcp) или оставить {{proto}} для автоподстановки сервера.",
+    type: "text",
+    placeholder: "{{proto}}",
+  },
+  {
+    key: "persist-key",
+    label: "Persist-key",
+    description: "Сохранять ключи при рестарте клиента.",
+    type: "checkbox",
+  },
+  {
+    key: "persist-tun",
+    label: "Persist-tun",
+    description: "Сохранять TUN-интерфейс при рестарте клиента.",
+    type: "checkbox",
+  },
+  {
+    key: "remote-cert-tls",
+    label: "Remote-cert-tls",
+    description: "Ожидаемый тип удалённого сертификата, обычно server.",
+    type: "text",
+    placeholder: "server",
+  },
+  {
+    key: "comp-lzo",
+    label: "Comp-lzo",
+    description: "Параметры LZO-сжатия клиента (например yes/no/adaptive).",
+    type: "select",
+    options: [
+      { value: "", label: "— не задано" },
+      { value: "no", label: "no" },
+      { value: "adaptive", label: "adaptive" },
+      { value: "yes", label: "yes" },
+    ],
+  },
+  {
+    key: "mute",
+    label: "Mute",
+    description: "Подавление повторяющихся сообщений лога после N срабатываний.",
+    type: "number",
+    placeholder: "20",
+  },
+  {
+    key: "verb",
+    label: "Verb",
+    description: "Уровень детализации лога клиента (0–11).",
+    type: "number",
+    placeholder: "3",
+  },
+];

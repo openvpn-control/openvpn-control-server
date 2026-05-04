@@ -1,0 +1,48 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "openvpn-control.fullname" . }}-backend-migrate-seed
+  labels:
+    {{- include "openvpn-control.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "openvpn-control.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate-seed
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          command: ["sh", "-c"]
+          args:
+            - npx prisma migrate deploy && node prisma/seed.js
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://{{ .Values.postgres.username }}:$(POSTGRES_PASSWORD)@{{ include "openvpn-control.fullname" . }}-postgres:{{ .Values.postgres.service.port }}/{{ .Values.postgres.database }}?schema=public"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openvpn-control.fullname" . }}-secrets
+                  key: postgres-password
+            - name: INIT_ADMIN_USERNAME
+              value: {{ .Values.backend.initAdminUsername | quote }}
+            - name: INIT_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openvpn-control.fullname" . }}-secrets
+                  key: init-admin-password
+{{- end }}
+
