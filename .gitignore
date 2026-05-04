@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build / cache
+frontend/dist/
+backend/.cache/
+*.log
+npm-debug.log*
+
+# Env and local data
+.env
+.env.*.local
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Prisma
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# Panel backups (local dev)
+backend/data/
