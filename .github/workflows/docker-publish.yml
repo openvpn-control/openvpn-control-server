@@ -1,7 +1,13 @@
-# Собирает образы backend и frontend и публикует в GitHub Container Registry (ghcr.io).
+# Собирает backend и frontend и публикует образы в GitHub Container Registry (ghcr.io).
+# Опционально зеркалирует те же манифесты в Docker Hub (без повторной сборки).
 #
-# Триггеры: push тега v* или workflow_dispatch (поле «тег образов»).
-# Образы: ghcr.io/<владелец>/<репозиторий>-backend / -frontend
+# Триггеры: push тега v* или workflow_dispatch.
+#
+# Настройка Docker Hub (репозиторий → Settings → Secrets and variables → Actions):
+#   Variables: DOCKERHUB_IMAGE_PREFIX = myuser/openvpn-control   (образы: ...-backend / ...-frontend)
+#   Secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN
+#
+# GHCR: ghcr.io/<owner>/<repo>-backend и ghcr.io/<owner>/<repo>-frontend
 
 name: Docker publish
 
@@ -33,11 +39,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Image name prefix (lowercase for GHCR)
+      - name: Image names (GHCR, lowercase)
         run: |
           owner_repo="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           echo "IMAGE_BACKEND=${{ env.REGISTRY }}/${owner_repo}-backend" >> "$GITHUB_ENV"
           echo "IMAGE_FRONTEND=${{ env.REGISTRY }}/${owner_repo}-frontend" >> "$GITHUB_ENV"
+
+      - name: Optional Docker Hub targets
+        id: hub
+        run: |
+          prefix="${{ vars.DOCKERHUB_IMAGE_PREFIX }}"
+          if [ -n "$prefix" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "backend=docker.io/${prefix}-backend" >> "$GITHUB_OUTPUT"
+            echo "frontend=docker.io/${prefix}-frontend" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Resolve tag
         id: tag
@@ -50,11 +68,20 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - uses: docker/login-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub (optional)
+        if: steps.hub.outputs.enabled == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Docker meta (backend)
         id: meta_backend
@@ -96,9 +123,19 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Docker Hub: раскомментируйте и задайте DOCKERHUB_USERNAME, DOCKERHUB_TOKEN
-      # - uses: docker/login-action@v3
-      #   with:
-      #     registry: docker.io
-      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
-      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Mirror to Docker Hub (optional)
+        if: steps.hub.outputs.enabled == 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+          SRC_BACKEND: ${{ env.IMAGE_BACKEND }}
+          SRC_FRONTEND: ${{ env.IMAGE_FRONTEND }}
+          DST_BACKEND: ${{ steps.hub.outputs.backend }}
+          DST_FRONTEND: ${{ steps.hub.outputs.frontend }}
+        run: |
+          set -eux
+          docker buildx imagetools create --tag "${DST_BACKEND}:${TAG}" "${SRC_BACKEND}:${TAG}"
+          docker buildx imagetools create --tag "${DST_FRONTEND}:${TAG}" "${SRC_FRONTEND}:${TAG}"
+          if [[ "${TAG}" == v* ]]; then
+            docker buildx imagetools create --tag "${DST_BACKEND}:latest" "${SRC_BACKEND}:${TAG}"
+            docker buildx imagetools create --tag "${DST_FRONTEND}:latest" "${SRC_FRONTEND}:${TAG}"
+          fi
