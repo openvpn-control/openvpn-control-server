@@ -1,8 +1,15 @@
 import "./matchMedia-polyfill.js";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.jsx";
+
+const memoryRouterFuture = { v7_startTransition: true, v7_relativeSplatPath: true };
+
+/** Диалог правил/NAT: заголовок оканчивается на «· Межсетевой экран». */
+async function findFirewallRuleDialog() {
+  return screen.findByRole("dialog", { name: /· Межсетевой экран$/ });
+}
 
 function makeJwt(expSecondsFromNow = 3600) {
   const header = btoa(JSON.stringify({ alg: "none", typ: "JWT" }))
@@ -144,7 +151,7 @@ describe("App UI", () => {
   it("shows login screen for unauthorized user", async () => {
     global.fetch = mockApiFetch();
     render(
-      <MemoryRouter initialEntries={["/servers"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers"]}>
         <App />
       </MemoryRouter>,
     );
@@ -159,7 +166,7 @@ describe("App UI", () => {
     global.fetch = mockApiFetch();
 
     render(
-      <MemoryRouter initialEntries={["/servers"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers"]}>
         <App />
       </MemoryRouter>,
     );
@@ -175,7 +182,7 @@ describe("App UI", () => {
     global.fetch = fetchMock;
 
     render(
-      <MemoryRouter initialEntries={["/servers"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers"]}>
         <App />
       </MemoryRouter>,
     );
@@ -195,7 +202,7 @@ describe("App UI", () => {
     global.fetch = mockApiFetchLoginFailure();
 
     render(
-      <MemoryRouter initialEntries={["/servers"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers"]}>
         <App />
       </MemoryRouter>,
     );
@@ -222,7 +229,7 @@ describe("App UI", () => {
     });
 
     render(
-      <MemoryRouter initialEntries={["/servers"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers"]}>
         <App />
       </MemoryRouter>,
     );
@@ -246,12 +253,14 @@ describe("App UI", () => {
     global.fetch = mockApiFetch();
 
     render(
-      <MemoryRouter initialEntries={["/servers/s1?tab=firewall"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers/s1?tab=firewall"]}>
         <App />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Межсетевой экран")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "Межсетевой экран" }),
+    ).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "+ Правило" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "+ NAT" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Effective Policy" }));
@@ -263,12 +272,14 @@ describe("App UI", () => {
     global.fetch = mockApiFetch();
 
     render(
-      <MemoryRouter initialEntries={["/organizations/o1/edit?tab=firewall"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/organizations/o1/edit?tab=firewall"]}>
         <App />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Межсетевой экран")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "Межсетевой экран" }),
+    ).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "+ Правило" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "+ NAT" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Effective Policy" }));
@@ -280,12 +291,14 @@ describe("App UI", () => {
     global.fetch = mockApiFetch();
 
     render(
-      <MemoryRouter initialEntries={["/users/u1?tab=firewall"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/users/u1?tab=firewall"]}>
         <App />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Межсетевой экран")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "Межсетевой экран" }),
+    ).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "+ Правило" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "+ NAT" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Effective Policy" }));
@@ -298,7 +311,7 @@ describe("App UI", () => {
     global.fetch = mockApiFetch();
 
     render(
-      <MemoryRouter initialEntries={["/servers/s1?tab=firewall"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers/s1?tab=firewall"]}>
         <App />
       </MemoryRouter>,
     );
@@ -338,7 +351,7 @@ describe("App UI", () => {
     global.fetch = mockApiFetch();
 
     render(
-      <MemoryRouter initialEntries={["/servers/s1?tab=firewall"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers/s1?tab=firewall"]}>
         <App />
       </MemoryRouter>,
     );
@@ -352,7 +365,8 @@ describe("App UI", () => {
 
     fireEvent.change(outSelect, { target: { value: "eth0" } });
     fireEvent.change(toSelect, { target: { value: "192.0.2.10" } });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    const saveDialog = await findFirewallRuleDialog();
+    fireEvent.click(within(saveDialog).getByRole("button", { name: "Сохранить" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Изменить" }));
     expect(outInput).toHaveValue("eth0");
@@ -366,7 +380,7 @@ describe("App UI", () => {
     global.fetch = mockApiFetch();
 
     render(
-      <MemoryRouter initialEntries={["/organizations/o1/edit?tab=firewall"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/organizations/o1/edit?tab=firewall"]}>
         <App />
       </MemoryRouter>,
     );
@@ -394,7 +408,7 @@ describe("App UI", () => {
     cleanup();
 
     render(
-      <MemoryRouter initialEntries={["/users/u1?tab=firewall"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/users/u1?tab=firewall"]}>
         <App />
       </MemoryRouter>,
     );
@@ -422,12 +436,14 @@ describe("App UI", () => {
     cleanup();
 
     render(
-      <MemoryRouter initialEntries={["/servers/s1?tab=firewall"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers/s1?tab=firewall"]}>
         <App />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Межсетевой экран")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "Межсетевой экран" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Action" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Proto" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Destination" })).toBeInTheDocument();
@@ -446,19 +462,21 @@ describe("App UI", () => {
     cleanup();
 
     render(
-      <MemoryRouter initialEntries={["/servers/s1?tab=firewall"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers/s1?tab=firewall"]}>
         <App />
       </MemoryRouter>,
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "+ NAT" }));
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    let natDialog = await findFirewallRuleDialog();
+    fireEvent.click(within(natDialog).getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByText("POSTROUTING")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "+ NAT" }));
-    const natTypeSelect = screen.getByDisplayValue("masquerade");
+    fireEvent.click(await screen.findByRole("button", { name: "+ NAT" }));
+    natDialog = await findFirewallRuleDialog();
+    const natTypeSelect = within(natDialog).getByDisplayValue("masquerade");
     fireEvent.change(natTypeSelect, { target: { value: "dnat" } });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    fireEvent.click(within(natDialog).getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByText("PREROUTING")).toBeInTheDocument();
   });
 
@@ -469,7 +487,7 @@ describe("App UI", () => {
     cleanup();
 
     render(
-      <MemoryRouter initialEntries={["/servers/new"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers/new"]}>
         <App />
       </MemoryRouter>,
     );
@@ -503,7 +521,7 @@ describe("App UI", () => {
     cleanup();
 
     render(
-      <MemoryRouter initialEntries={["/organizations/new"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/organizations/new"]}>
         <App />
       </MemoryRouter>,
     );
@@ -526,7 +544,7 @@ describe("App UI", () => {
     cleanup();
 
     render(
-      <MemoryRouter initialEntries={["/users/new"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/users/new"]}>
         <App />
       </MemoryRouter>,
     );
@@ -550,7 +568,7 @@ describe("App UI", () => {
     cleanup();
 
     render(
-      <MemoryRouter initialEntries={["/servers/s1?tab=settings"]}>
+      <MemoryRouter future={memoryRouterFuture} initialEntries={["/servers/s1?tab=settings"]}>
         <App />
       </MemoryRouter>,
     );

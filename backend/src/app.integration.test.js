@@ -4,6 +4,7 @@ import request from "supertest";
 import jwt from "jsonwebtoken";
 import { createApp } from "./app.js";
 import { config } from "./config.js";
+import { prisma } from "./prisma.js";
 
 const PROTECTED_PREFIXES = [
   "/api/agent",
@@ -45,8 +46,13 @@ test("protected route with invalid token returns 401 Invalid token", async () =>
   assert.equal(res.body?.error, "Invalid token");
 });
 
-test("protected route with valid token passes auth middleware", async () => {
+test("protected route with valid token passes auth middleware", async (t) => {
   const app = createApp();
+  const original = prisma.panelAsyncTask.findMany;
+  prisma.panelAsyncTask.findMany = async () => [];
+  t.after(() => {
+    prisma.panelAsyncTask.findMany = original;
+  });
   const token = jwt.sign({ sub: "admin-1", username: "admin" }, config.jwtSecret, { expiresIn: "5m" });
   const res = await request(app).get("/api/tasks").set("Authorization", `Bearer ${token}`);
   assert.notEqual(res.status, 401);
