@@ -9,7 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    setupFiles: "./src/test/setupTests.js",
+    setupFiles: ["./src/test/matchMedia-polyfill.js", "./src/test/setupTests.js"],
     globals: true,
     css: true,
   },
