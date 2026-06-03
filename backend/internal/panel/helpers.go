@@ -11,6 +11,7 @@ import (
 	"github.com/segmentio/ksuid"
 
 	"github.com/openvpn-control/openvpn-control-server/backend/internal/agent"
+	"github.com/openvpn-control/openvpn-control-server/backend/internal/openvpn"
 )
 
 func jsonUnmarshal(raw []byte, dst any) error {
@@ -109,6 +110,11 @@ func mergeSettings(prev, incoming map[string]any) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+func ensureOpenvpnSettingsReady(settings map[string]any) {
+	openvpn.EnsureServerCryptoDefaults(settings)
+	openvpn.EnsureMaterialPaths(settings)
 }
 
 func mapAgentError(err error) Result {

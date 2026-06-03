@@ -13264,8 +13264,16 @@ export default function App() {
                         if (created?.id) {
                           const partial =
                             serverKeyMaterialModal.kind === "dh"
-                              ? { panelDhMaterialId: created.id }
-                              : { panelTlsAuthMaterialId: created.id };
+                              ? {
+                                  panelDhMaterialId: created.id,
+                                  dh: String(serverOpenVpnSettings.dh || "").trim() || "/etc/openvpn/dh.pem",
+                                }
+                              : {
+                                  panelTlsAuthMaterialId: created.id,
+                                  "tls-auth":
+                                    String(serverOpenVpnSettings["tls-auth"] || "").trim() ||
+                                    "/etc/openvpn/ta.key 0",
+                                };
                           await persistOpenVpnPanelPartial(partial);
                         }
                         await refreshServerNodeOpenvpnMaterials(selectedServerId);
@@ -13356,8 +13364,16 @@ export default function App() {
                         if (created?.id) {
                           const partial =
                             serverKeyMaterialModal.kind === "dh"
-                              ? { panelDhMaterialId: created.id }
-                              : { panelTlsAuthMaterialId: created.id };
+                              ? {
+                                  panelDhMaterialId: created.id,
+                                  dh: String(serverOpenVpnSettings.dh || "").trim() || "/etc/openvpn/dh.pem",
+                                }
+                              : {
+                                  panelTlsAuthMaterialId: created.id,
+                                  "tls-auth":
+                                    String(serverOpenVpnSettings["tls-auth"] || "").trim() ||
+                                    "/etc/openvpn/ta.key 0",
+                                };
                           await persistOpenVpnPanelPartial(partial);
                         }
                         await refreshServerNodeOpenvpnMaterials(selectedServerId);

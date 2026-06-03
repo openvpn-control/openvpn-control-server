@@ -1,5 +1,13 @@
 package openvpn
 
+import (
+	"fmt"
+	"strings"
+)
+
+// DefaultDhPath is the conventional path written by panel DH sync tasks.
+const DefaultDhPath = "/etc/openvpn/dh.pem"
+
 // InitialServerSettings is the seed when the agent is unreachable.
 func InitialServerSettings() map[string]any {
 	return map[string]any{
@@ -67,5 +75,58 @@ func InitialServerSettings() map[string]any {
 		"panelTlsAuthMaterialId": "",
 		"push":                   []any{},
 		"route":                  []any{},
+	}
+}
+
+func settingStr(settings map[string]any, key string) string {
+	if settings == nil {
+		return ""
+	}
+	v, ok := settings[key]
+	if !ok || v == nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.Trim(strings.ReplaceAll(strings.ReplaceAll(
+		strings.TrimSpace(fmtAny(v)), "\n", " "), "\r", ""), `"`))
+}
+
+func fmtAny(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+// EnsureServerCryptoDefaults fills data-ciphers for OpenVPN 2.5+ and drops empty cipher.
+func EnsureServerCryptoDefaults(settings map[string]any) {
+	if settings == nil {
+		return
+	}
+	if settingStr(settings, "data-ciphers") == "" {
+		settings["data-ciphers"] = "AES-256-GCM:AES-128-GCM"
+	}
+	if settingStr(settings, "auth") == "" {
+		settings["auth"] = "SHA256"
+	}
+	if settingStr(settings, "tls-version-min") == "" {
+		settings["tls-version-min"] = "1.2"
+	}
+	if _, ok := settings["cipher"]; ok && settingStr(settings, "cipher") == "" {
+		delete(settings, "cipher")
+	}
+}
+
+// EnsureMaterialPaths sets dh/tls-auth paths when panel materials are linked but paths are empty.
+func EnsureMaterialPaths(settings map[string]any) {
+	if settings == nil {
+		return
+	}
+	if settingStr(settings, "panelDhMaterialId") != "" && settingStr(settings, "dh") == "" {
+		settings["dh"] = DefaultDhPath
+	}
+	if settingStr(settings, "panelTlsAuthMaterialId") != "" && settingStr(settings, "tls-auth") == "" {
+		settings["tls-auth"] = "/etc/openvpn/ta.key 0"
 	}
 }

@@ -178,6 +178,7 @@ func PostOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeID
 		prev = map[string]any{}
 	}
 	merged := mergeSettings(prev, incoming)
+	ensureOpenvpnSettingsReady(merged)
 	if !openvpn.AgentSettingsEqual(prev, merged) {
 		if _, err := agent.PostOpenVPNSettings(ctx, an, openvpn.StripPanelOnlySettings(merged)); err != nil {
 			return mapAgentError(err)
@@ -562,9 +563,11 @@ func PostOpenvpnCheckConfigForPanel(ctx context.Context, pool *pgxpool.Pool, nod
 	}
 	saved, _, err := loadSettingsRow(ctx, pool, an.ID)
 	if err == nil && saved != nil {
+		ensureOpenvpnSettingsReady(saved)
 		if _, err := agent.PostOpenVPNSettings(ctx, an, openvpn.StripPanelOnlySettings(saved)); err != nil {
 			return mapAgentError(err)
 		}
+		_ = upsertSettings(ctx, pool, an.ID, saved, nil)
 	}
 	data, err := agent.PostOpenVPNCheckConfig(ctx, an)
 	if err != nil {
