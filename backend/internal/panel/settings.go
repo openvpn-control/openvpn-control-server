@@ -178,8 +178,10 @@ func PostOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeID
 		prev = map[string]any{}
 	}
 	merged := mergeSettings(prev, incoming)
-	if _, err := agent.PostOpenVPNSettings(ctx, an, openvpn.StripPanelOnlySettings(merged)); err != nil {
-		return mapAgentError(err)
+	if !openvpn.AgentSettingsEqual(prev, merged) {
+		if _, err := agent.PostOpenVPNSettings(ctx, an, openvpn.StripPanelOnlySettings(merged)); err != nil {
+			return mapAgentError(err)
+		}
 	}
 	if err := paneltasks.EnqueueOpenvpnMaterialSyncTasks(ctx, pool, an.ID, merged); err != nil {
 		return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}

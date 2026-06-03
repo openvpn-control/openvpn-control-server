@@ -2221,6 +2221,8 @@ export default function App() {
     busy: false,
     error: "",
   });
+  const [serverBindRootCaPick, setServerBindRootCaPick] = useState("");
+  const [serverBindRootCaBusy, setServerBindRootCaBusy] = useState(false);
   const serverCaIndexFileRef = useRef(null);
   const [serverRootCaDeleteModal, setServerRootCaDeleteModal] = useState({
     open: false,
@@ -3665,6 +3667,21 @@ export default function App() {
         busy: false,
         error: e?.message || "Не удалось импортировать сертификат",
       }));
+    }
+  };
+
+  const bindServerPanelRootCa = async (rootCaId) => {
+    const rid = String(rootCaId || "").trim();
+    if (!rid || !selectedServerId || !tokenRef.current) return;
+    setServerBindRootCaBusy(true);
+    try {
+      setError("");
+      await persistOpenVpnPanelPartial({ panelRootCaId: rid, panelServerCertId: "" });
+      await loadData();
+    } catch (err) {
+      setError(err?.message || String(err));
+    } finally {
+      setServerBindRootCaBusy(false);
     }
   };
 
@@ -7761,9 +7778,41 @@ export default function App() {
                             ) : null}
                           </div>
                           {!panelRootCaIdForServer ? (
-                            <p className="muted" style={{ marginTop: 12 }}>
-                              Для этого сервера корневой сертификат пока не назначен.
-                            </p>
+                            <div style={{ marginTop: 12 }}>
+                              <p className="muted" style={{ marginTop: 0 }}>
+                                Кнопки выпуска и импорта сертификатов неактивны, пока к серверу не привязан корневой УЦ.
+                                {rootCAs.length > 0
+                                  ? " Выберите уже созданный корневой сертификат или назначьте его на вкладке «Сертификаты»."
+                                  : " Сначала создайте корневой сертификат на вкладке «Сертификаты»."}
+                              </p>
+                              {rootCAs.length > 0 ? (
+                                <div className="row-inline" style={{ gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                                  <select
+                                    className="app-filter-input"
+                                    value={serverBindRootCaPick || rootCAs[0]?.id || ""}
+                                    disabled={serverBindRootCaBusy || serverOpenVpnLoading}
+                                    onChange={(e) => setServerBindRootCaPick(e.target.value)}
+                                    aria-label="Корневой сертификат для привязки"
+                                  >
+                                    {rootCAs.map((r) => (
+                                      <option key={r.id} value={r.id}>
+                                        {r.name || r.commonName || r.id}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    className="btn-secondary"
+                                    disabled={serverBindRootCaBusy || serverOpenVpnLoading}
+                                    onClick={() =>
+                                      void bindServerPanelRootCa(serverBindRootCaPick || rootCAs[0]?.id || "")
+                                    }
+                                  >
+                                    {serverBindRootCaBusy ? "Привязка…" : "Привязать к серверу"}
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
                           ) : serverCenterSelectedCert ? (
                             <>
                               <div className="app-table-scroll">

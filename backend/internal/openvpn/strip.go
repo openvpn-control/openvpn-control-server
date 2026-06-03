@@ -1,6 +1,10 @@
 package openvpn
 
-import "strings"
+import (
+	"bytes"
+	"encoding/json"
+	"strings"
+)
 
 var panelOnlyKeys = map[string]struct{}{
 	"remote":        {},
@@ -26,4 +30,14 @@ func StripPanelOnlySettings(settings map[string]any) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+// AgentSettingsEqual reports whether server.conf-relevant settings changed.
+func AgentSettingsEqual(prev, merged map[string]any) bool {
+	a, err1 := json.Marshal(StripPanelOnlySettings(prev))
+	b, err2 := json.Marshal(StripPanelOnlySettings(merged))
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return bytes.Equal(a, b)
 }

@@ -9,7 +9,7 @@ Thank you for improving OpenVPN Control Server.
 ## Development
 
 - Frontend: `frontend/` — `npm ci && npm test`
-- Backend: `backend/` — `npm ci && npm test`
+- Backend: `backend/` — `go test ./...`
 
 The **agent** lives in a separate repository; do not commit agent code here.
 

@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/segmentio/ksuid"
+
+	"github.com/openvpn-control/openvpn-control-server/backend/internal/openvpn"
 )
 
 var (
@@ -196,11 +198,7 @@ func DeleteNodeOpenvpnMaterial(ctx context.Context, pool *pgxpool.Pool, agentNod
 }
 
 func generateDhPem2048() (string, error) {
-	out, err := exec.Command("openssl", "dhparam", "-outform", "PEM", "2048").Output()
-	if err != nil {
-		return "", fmt.Errorf("openssl dhparam: %w", err)
-	}
-	return string(out), nil
+	return openvpn.GenerateDhPem2048()
 }
 
 func generateTlsAuthKeyPem() (string, error) {

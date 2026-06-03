@@ -22,12 +22,15 @@ func FirstTlsAuthPath(tlsAuthLine string) string {
 	return parts[0]
 }
 
-// GenerateDhPem2048 runs openssl dhparam.
+// GenerateDhPem2048 runs openssl dhparam (requires openssl in PATH).
 func GenerateDhPem2048() (string, error) {
+	if _, err := exec.LookPath("openssl"); err != nil {
+		return "", fmt.Errorf("openssl не найден в PATH: установите openssl в образ/систему панели (для Docker: apk add openssl)")
+	}
 	cmd := exec.Command("openssl", "dhparam", "-outform", "PEM", "2048")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))
+		return "", fmt.Errorf("openssl dhparam: %s", strings.TrimSpace(string(out)))
 	}
 	return string(out), nil
 }

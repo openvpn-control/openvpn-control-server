@@ -891,7 +891,19 @@ func (h *Certificates) RootCAGenerate(w http.ResponseWriter, r *http.Request) {
 	).Scan(&id, &name, &commonName, &isActive, &createdAt, &updatedAt, &certPEM)
 	if err != nil {
 		if isUniqueViolation(err) {
-			httpx.WriteError(w, http.StatusConflict, "Корневой сертификат с таким именем уже существует")
+			err = h.Pool.QueryRow(r.Context(), `
+				SELECT id, name, "commonName", "isActive", "createdAt", "updatedAt", "certPem"
+				FROM "RootCertificateAuthority" WHERE name = $1`, name,
+			).Scan(&id, &name, &commonName, &isActive, &createdAt, &updatedAt, &certPEM)
+			if err != nil {
+				httpx.WriteError(w, http.StatusConflict, "Корневой сертификат с таким именем уже существует")
+				return
+			}
+			httpx.WriteJSON(w, http.StatusOK, map[string]any{
+				"id": id, "name": name, "commonName": commonName, "isActive": isActive,
+				"createdAt": createdAt, "updatedAt": updatedAt,
+				"expiresAt": cert.PemExpiryISO(certPEM), "existing": true,
+			})
 			return
 		}
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())

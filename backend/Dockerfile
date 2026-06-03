@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/server ./cmd/server
 
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates wget
+RUN apk add --no-cache ca-certificates wget openssl openvpn
 
 WORKDIR /app
 COPY --from=build /out/server /app/server
