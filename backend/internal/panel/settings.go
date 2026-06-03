@@ -301,16 +301,14 @@ func ApplyOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeI
 		return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
 	}
 	_ = paneltasks.ProcessPendingTasksForNode(ctx, pool, an.ID, 50)
-	if _, err := agent.PostOpenVPNSettingsStage(ctx, an, openvpn.StripPanelOnlySettings(settings)); err != nil {
-		return mapAgentError(err)
-	}
-	applyData, err := agent.PostOpenVPNApplyConfig(ctx, an)
+	payload := openvpn.StripPanelOnlySettings(settings)
+	applyData, err := agent.PostOpenVPNApplyConfig(ctx, an, payload)
 	if err != nil {
 		return mapAgentError(err)
 	}
 	if agentData, err := agent.GetOpenVPNSettings(ctx, an); err == nil {
 		if onDisk, ok := agentData["settings"].(map[string]any); ok {
-			settings = openvpn.MergeSettingsForDisplay(settings, onDisk)
+			settings = mergeSettings(onDisk, settings)
 		}
 	}
 	if err := upsertSettings(ctx, pool, an.ID, settings, nil); err != nil {
