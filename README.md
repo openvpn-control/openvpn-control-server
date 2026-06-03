@@ -103,7 +103,7 @@ Helm-чарт в этом репозитории не поставляется. 
 
 Закомментированный пример входа в Docker Hub: [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml).
 
-**GitLab:** [.gitlab-ci.yml](.gitlab-ci.yml) — job `build-nginx` (образы `openvpn-control-server-nginx` и `-nginx-certbot` в Container Registry проекта).
+Образы **nginx** и **nginx-certbot** собираются тем же workflow **Docker publish**, что backend и frontend.
 
 **Бинарники агента** собираются в отдельном репозитории **openvpn-control-agent** (релизы с приложенными файлами).
 

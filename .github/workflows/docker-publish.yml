@@ -1,4 +1,4 @@
-# Собирает backend и frontend и публикует образы в GitHub Container Registry (ghcr.io).
+# Собирает backend, frontend и edge-nginx и публикует образы в GitHub Container Registry (ghcr.io).
 # Теги образов:
 #   - push в любую ветку → короткий SHA коммита (например a1b2c3d);
 #   - push git-тега v* → имя тега (v1.2.3) и дополнительно :latest;
@@ -9,10 +9,10 @@
 # Триггеры: push в любую ветку, push тега v*, workflow_dispatch.
 #
 # Настройка Docker Hub (репозиторий → Settings → Secrets and variables → Actions):
-#   Variables: DOCKERHUB_IMAGE_PREFIX = myuser/openvpn-control   (образы: ...-backend / ...-frontend)
+#   Variables: DOCKERHUB_IMAGE_PREFIX = myuser/openvpn-control
 #   Secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN
 #
-# GHCR: ghcr.io/<owner>/<repo>-backend и ghcr.io/<owner>/<repo>-frontend
+# GHCR: ghcr.io/<owner>/<repo>-{backend,frontend,nginx,nginx-certbot}
 
 name: Docker publish
 
