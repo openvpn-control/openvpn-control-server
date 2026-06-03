@@ -43,6 +43,26 @@ const OPENVPN_SERVER_FORM_SHARED_DIRECTIVES = new Set([
 ]);
 const PANEL_CLIENT_PROFILE_KEYS = ["remote", "resolv-retry", "nobind", "key-direction", "client-verb"];
 
+/** Default server.conf paths when linking panel root CA / server cert (sync tasks write these files). */
+function openvpnCertPathsPartial(settings, { panelRootCaId, panelServerCertId } = {}) {
+  const partial = {};
+  if (panelRootCaId !== undefined) {
+    partial.panelRootCaId = panelRootCaId;
+    if (panelRootCaId) {
+      if (!String(settings?.ca ?? "").trim()) partial.ca = "/etc/openvpn/ca.crt";
+      if (!String(settings?.["crl-verify"] ?? "").trim()) partial["crl-verify"] = "/etc/openvpn/crl.pem";
+    }
+  }
+  if (panelServerCertId !== undefined) {
+    partial.panelServerCertId = panelServerCertId;
+    if (panelServerCertId) {
+      if (!String(settings?.cert ?? "").trim()) partial.cert = "/etc/openvpn/server.crt";
+      if (!String(settings?.key ?? "").trim()) partial.key = "/etc/openvpn/server.key";
+    }
+  }
+  return partial;
+}
+
 function buildOpenVpnPayloadForAgent(stateObj) {
   const out = { ...stateObj };
   for (const f of OPENVPN_SERVER_SETTINGS_FIELDS) {
@@ -3575,7 +3595,11 @@ export default function App() {
           signatureAlgorithm: srvCertCreateModal.signatureAlgorithm || "sha256",
         },
       );
-      if (created?.id) await persistOpenVpnPanelPartial({ panelServerCertId: created.id });
+      if (created?.id) {
+        await persistOpenVpnPanelPartial(
+          openvpnCertPathsPartial(serverOpenVpnSettings, { panelServerCertId: created.id }),
+        );
+      }
       await loadData();
       setSrvCertCreateModal({
         open: false,
@@ -3676,7 +3700,9 @@ export default function App() {
     setServerBindRootCaBusy(true);
     try {
       setError("");
-      await persistOpenVpnPanelPartial({ panelRootCaId: rid, panelServerCertId: "" });
+      await persistOpenVpnPanelPartial(
+        openvpnCertPathsPartial(serverOpenVpnSettings, { panelRootCaId: rid, panelServerCertId: "" }),
+      );
       await loadData();
     } catch (err) {
       setError(err?.message || String(err));
@@ -3744,7 +3770,11 @@ export default function App() {
         tokenRef.current,
         { rootCaId: rid, certPem: srvCertImportModal.certPem, keyPem: srvCertImportModal.keyPem },
       );
-      if (created?.id) await persistOpenVpnPanelPartial({ panelServerCertId: created.id });
+      if (created?.id) {
+        await persistOpenVpnPanelPartial(
+          openvpnCertPathsPartial(serverOpenVpnSettings, { panelServerCertId: created.id }),
+        );
+      }
       await loadData();
       setSrvCertImportModal({ open: false, certPem: "", keyPem: "", busy: false, error: "" });
     } catch (e) {
@@ -5205,7 +5235,9 @@ export default function App() {
         signatureAlgorithm: "sha256",
       });
       if (created?.id) {
-        await persistOpenVpnPanelPartial({ panelRootCaId: created.id, panelServerCertId: "" });
+        await persistOpenVpnPanelPartial(
+          openvpnCertPathsPartial(serverOpenVpnSettings, { panelRootCaId: created.id, panelServerCertId: "" }),
+        );
       }
       await loadData();
       setServerRootCaCreateModalOpen(false);
@@ -5232,7 +5264,9 @@ export default function App() {
       const created = await request("/api/certificates/root-ca/import", "POST", token, { certPem, keyPem });
       setServerPanelRootCaImport({ certPem: "", keyPem: "" });
       if (created?.id) {
-        await persistOpenVpnPanelPartial({ panelRootCaId: created.id, panelServerCertId: "" });
+        await persistOpenVpnPanelPartial(
+          openvpnCertPathsPartial(serverOpenVpnSettings, { panelRootCaId: created.id, panelServerCertId: "" }),
+        );
       }
       await loadData();
       setServerRootCaImportModalOpen(false);

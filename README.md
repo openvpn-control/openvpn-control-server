@@ -1,5 +1,8 @@
 # OpenVPN Control Server
 
+[![CI Tests](https://github.com/openvpn-control/openvpn-control-server/actions/workflows/ci-tests.yml/badge.svg)](https://github.com/openvpn-control/openvpn-control-server/actions/workflows/ci-tests.yml)
+[![Docker publish](https://github.com/openvpn-control/openvpn-control-server/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/openvpn-control/openvpn-control-server/actions/workflows/docker-publish.yml)
+
 Веб-панель управления OpenVPN.
 
 **Лицензия:** [MIT](LICENSE) · **Безопасность:** [SECURITY.md](SECURITY.md) · **Вклад:** [CONTRIBUTING.md](CONTRIBUTING.md)

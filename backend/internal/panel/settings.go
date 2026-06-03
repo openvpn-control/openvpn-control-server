@@ -564,10 +564,13 @@ func PostOpenvpnCheckConfigForPanel(ctx context.Context, pool *pgxpool.Pool, nod
 	saved, _, err := loadSettingsRow(ctx, pool, an.ID)
 	if err == nil && saved != nil {
 		ensureOpenvpnSettingsReady(saved)
+		if err := upsertSettings(ctx, pool, an.ID, saved, nil); err != nil {
+			return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
+		}
+		_ = paneltasks.EnqueueOpenvpnMaterialSyncTasks(ctx, pool, an.ID, saved)
 		if _, err := agent.PostOpenVPNSettings(ctx, an, openvpn.StripPanelOnlySettings(saved)); err != nil {
 			return mapAgentError(err)
 		}
-		_ = upsertSettings(ctx, pool, an.ID, saved, nil)
 	}
 	data, err := agent.PostOpenVPNCheckConfig(ctx, an)
 	if err != nil {

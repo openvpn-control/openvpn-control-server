@@ -5,8 +5,14 @@ import (
 	"strings"
 )
 
-// DefaultDhPath is the conventional path written by panel DH sync tasks.
-const DefaultDhPath = "/etc/openvpn/dh.pem"
+// Conventional paths on the VPN node (written by panel sync tasks).
+const (
+	DefaultCAPath         = "/etc/openvpn/ca.crt"
+	DefaultServerCertPath = "/etc/openvpn/server.crt"
+	DefaultServerKeyPath  = "/etc/openvpn/server.key"
+	DefaultCrlPath        = "/etc/openvpn/crl.pem"
+	DefaultDhPath         = "/etc/openvpn/dh.pem"
+)
 
 // InitialServerSettings is the seed when the agent is unreachable.
 func InitialServerSettings() map[string]any {
@@ -118,10 +124,26 @@ func EnsureServerCryptoDefaults(settings map[string]any) {
 	}
 }
 
-// EnsureMaterialPaths sets dh/tls-auth paths when panel materials are linked but paths are empty.
+// EnsureMaterialPaths sets OpenVPN file paths when panel links exist but paths are empty.
 func EnsureMaterialPaths(settings map[string]any) {
 	if settings == nil {
 		return
+	}
+	if settingStr(settings, "panelRootCaId") != "" {
+		if settingStr(settings, "ca") == "" {
+			settings["ca"] = DefaultCAPath
+		}
+		if settingStr(settings, "crl-verify") == "" {
+			settings["crl-verify"] = DefaultCrlPath
+		}
+	}
+	if settingStr(settings, "panelServerCertId") != "" {
+		if settingStr(settings, "cert") == "" {
+			settings["cert"] = DefaultServerCertPath
+		}
+		if settingStr(settings, "key") == "" {
+			settings["key"] = DefaultServerKeyPath
+		}
 	}
 	if settingStr(settings, "panelDhMaterialId") != "" && settingStr(settings, "dh") == "" {
 		settings["dh"] = DefaultDhPath
