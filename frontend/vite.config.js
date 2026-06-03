@@ -7,7 +7,9 @@ function productionHtmlPlugin() {
     name: "openvpn-control-html",
     apply: "build",
     transformIndexHtml(html) {
-      return html.replace(/\s*<script src="\/env-config\.js"><\/script>\s*/i, "\n");
+      return html
+        .replace(/\s*<script src="\/env-config\.js"><\/script>\s*/i, "\n")
+        .replace(/\s+crossorigin/g, "");
     },
   };
 }
