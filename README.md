@@ -8,29 +8,39 @@
 
 - `frontend` — панель (React + Vite)
 - `backend` — API (Express + Prisma)
-- `postgres` — база (в Docker Compose)
 
 ## Быстрый старт (локально)
 
+### Backend и frontend отдельно
+
 ```bash
-docker compose up --build
+# backend
+cd backend && npm install && npm run dev
+
+# frontend (в другом терминале)
+cd frontend && npm install
+VITE_API_URL=http://localhost:8080 npm run dev
 ```
 
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:8080`
-- PostgreSQL: `localhost:5432`
 
-### Учётные данные по умолчанию в Compose
+### Docker / Kubernetes
 
-В `docker-compose.yml` заданы **демонстрационные** `INIT_ADMIN_*`. Для сети смените их, `JWT_SECRET` и пароль БД — см. [backend/.env.example](backend/.env.example).
+Развёртывание через образы GHCR и переменные окружения — в каталоге **openvpn-control** (`docker-compose.yml`, `.env.example`, Helm chart). Там же задаётся `API_URL` для панели.
+
+Адрес API для панели:
+
+- **Локальная разработка** (`npm run dev`): переменная `VITE_API_URL` в окружении (см. пример выше).
+- **Docker / Kubernetes**: `API_URL` при старте контейнера frontend (в `.env` каталога `openvpn-control` или в Helm values).
 
 ## Развёртывание у себя (self-host)
 
 1. **Секреты:** `JWT_SECRET`, пароль PostgreSQL, начальный админ — без демо-значений в проде.
-2. **URL:** `CORS_ORIGIN`, `CSRF_TRUSTED_ORIGINS`, `ALLOWED_HOSTS` строго под ваш HTTPS-хост (учёт reverse proxy / `X-Forwarded-Host`).
+2. **URL:** `CORS_ORIGIN`, `CSRF_TRUSTED_ORIGINS`, `ALLOWED_HOSTS`, `API_URL` строго под ваш HTTPS-хост (учёт reverse proxy / `X-Forwarded-Host`).
 3. **HTTPS** end-to-end для доступа из недоверенных сетей.
 4. **Сеть:** по возможности ограничьте доступ к панели; порты агента на узлах — не в открытый интернет без необходимости.
-5. **Бэкапы:** PostgreSQL и каталог резервных копий панели (`docker-compose` / PVC в Kubernetes при своём развёртывании).
+5. **Бэкапы:** PostgreSQL и каталог резервных копий панели (PVC в Kubernetes или том в `openvpn-control/docker-compose.yml`).
 6. **Обновления:** образы и зависимости.
 
 ### Kubernetes
@@ -40,7 +50,7 @@ Helm-чарт в этом репозитории не поставляется. 
 ### Где хранятся резервные копии панели
 
 - В контейнере backend: `/app/data/panel-backups`
-- В Compose: том `panel_backups_data`
+- В `openvpn-control/docker-compose.yml`: том `panel_backups_data`
 
 ## Релизы: образы Docker (GitHub Actions)
 

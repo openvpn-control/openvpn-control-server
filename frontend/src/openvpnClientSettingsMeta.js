@@ -1,8 +1,9 @@
 export const OPENVPN_CLIENT_SETTINGS_FIELDS = [
   {
     key: "client",
-    label: "Client",
-    description: "Режим клиентского профиля (директива client).",
+    label: "Директива client в .ovpn",
+    description:
+      "«Да» — в сгенерированный профиль попадает client: обычное подключение к вашему OpenVPN-серверу (ноутбук, телефон). «Нет» — без client (только для нестандартных конфигов; для обычных пользователей — «Да»). Это не переключатель site-to-site.",
     type: "checkbox",
   },
   {

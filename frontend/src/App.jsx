@@ -242,7 +242,7 @@ function fallbackServerDerivedClientLines(serverSettings) {
   return out;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+import { API_URL } from "./apiConfig.js";
 const TOKEN_STORAGE_KEY = "ovpn_control_admin_token";
 const SESSION_INVALID_EVENT = "ovpn:session-invalid";
 const DISCONNECTING_SESSIONS_STORAGE_KEY = "ovpn:disconnecting-sessions";
