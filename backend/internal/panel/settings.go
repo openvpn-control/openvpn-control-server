@@ -130,8 +130,8 @@ func GetOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeID 
 		if prev == nil {
 			prev = map[string]any{}
 		}
-		// Настройки из БД панели важнее снимка server.conf (иначе group nogroup с узла затирает правки).
-		merged := mergeSettings(agentSettings, prev)
+		// Снимок server.conf (агент) важнее устаревшей БД; user/group и panel* — из БД.
+		merged := openvpn.MergeSettingsForDisplay(prev, agentSettings)
 		ensureOpenvpnSettingsReady(merged)
 		if err := upsertSettings(ctx, pool, an.ID, merged, cp); err != nil {
 			return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
@@ -307,6 +307,11 @@ func ApplyOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeI
 	applyData, err := agent.PostOpenVPNApplyConfig(ctx, an)
 	if err != nil {
 		return mapAgentError(err)
+	}
+	if agentData, err := agent.GetOpenVPNSettings(ctx, an); err == nil {
+		if onDisk, ok := agentData["settings"].(map[string]any); ok {
+			settings = openvpn.MergeSettingsForDisplay(settings, onDisk)
+		}
 	}
 	if err := upsertSettings(ctx, pool, an.ID, settings, nil); err != nil {
 		return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
