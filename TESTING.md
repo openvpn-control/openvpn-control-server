@@ -3,32 +3,23 @@
 ## Run locally
 
 - Frontend: `cd frontend && npm ci && npm test`
-- Backend: `cd backend && npm ci && npm test`
+- Backend (Go): `cd backend && go test ./...`
 
 ## CI
 
-On each `push` and `pull_request`: [.github/workflows/ci-tests.yml](.github/workflows/ci-tests.yml) — jobs `frontend-tests`, `backend-tests`.
+On each `push` and `pull_request`: [.github/workflows/ci-tests.yml](.github/workflows/ci-tests.yml) — jobs `frontend-tests`, `backend-tests` (Go).
 
 ## Coverage matrix (current)
 
 ### Frontend
 
-- Auth UI: login render, success/failure flows
-- Routing: `appRoutes` parse/build
-- Firewall UI (server/organization/user): render, Effective Policy modal, NAT modal (`preset` vs `manual`), table/empty states, NAT hook labels
-- CRUD / OpenVPN: agent node, organization, VPN user, OpenVPN save/apply
+- Auth UI, routing, firewall UI, CRUD / OpenVPN flows (Vitest)
 
-### Backend
+### Backend (Go)
 
-- App: `/health`, CORS, auth guard on protected prefixes
-- Modules: tasks, organizations, vpn-users, agents, admins, clients, monitoring, openvpn-panel branches
-- Services: firewall composition/normalization, iptables render, user CCD, OpenVPN sync helpers, certificate helpers
+- `internal/cert` — inventory parsing
+- Integration tests can be added under `backend/..._test.go`
 
 ### Agent
 
-The Go agent is tested in the **openvpn-control-agent** repository.
-
-## Stability notes
-
-- Backend tests may use `--test-concurrency=1` to avoid Prisma mock races.
-- Restore original `prisma` methods after monkeypatching (`t.after(...)`).
+The OpenVPN agent is tested in the **openvpn-control-agent** repository.

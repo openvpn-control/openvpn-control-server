@@ -1,0 +1,81 @@
+# Продакшен: образы из GHCR. Панель http://host:8080/, API http://host:8080/api/
+# docker compose -f docker-compose.prod.yml up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: openvpn-control-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openvpn_control}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-openvpn_control}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: ${IMAGE_REGISTRY:-ghcr.io/openvpn-control}/openvpn-control-server-backend:${IMAGE_TAG:-latest}
+    container_name: openvpn-control-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health | grep -q ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+    environment:
+      PORT: 8080
+      PRISMA_MIGRATIONS_DIR: /app/prisma/migrations
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-openvpn_control}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-super_secret_replace_in_prod}
+      INIT_ADMIN_USERNAME: ${INIT_ADMIN_USERNAME:-admin}
+      INIT_ADMIN_PASSWORD: ${INIT_ADMIN_PASSWORD:-admin123}
+      PANEL_BACKUP_DIR: /app/data/panel-backups
+      CORS_PROTECTION_ENABLED: ${CORS_PROTECTION_ENABLED:-false}
+      CSRF_PROTECTION_ENABLED: ${CSRF_PROTECTION_ENABLED:-false}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-8}
+      LOGIN_LOCKOUT_MINUTES: ${LOGIN_LOCKOUT_MINUTES:-15}
+      AGENT_SYNC_INTERVAL_MS: ${AGENT_SYNC_INTERVAL_MS:-2000}
+      OPENVPN_INFO_SYNC_INTERVAL_MS: ${OPENVPN_INFO_SYNC_INTERVAL_MS:-5000}
+      CLIENT_SYNC_INTERVAL_MS: ${CLIENT_SYNC_INTERVAL_MS:-2000}
+      CLIENT_SESSION_FRESHNESS_SECONDS: ${CLIENT_SESSION_FRESHNESS_SECONDS:-15}
+      CLIENT_TRAFFIC_HISTORY_MINUTES: ${CLIENT_TRAFFIC_HISTORY_MINUTES:-15}
+      AGENT_METRIC_HISTORY_MINUTES: ${AGENT_METRIC_HISTORY_MINUTES:-15}
+      OPENVPN_LOG_RETENTION_DAYS: ${OPENVPN_LOG_RETENTION_DAYS:-10}
+    volumes:
+      - panel_backups_data:/app/data/panel-backups
+
+  frontend:
+    image: ${IMAGE_REGISTRY:-ghcr.io/openvpn-control}/openvpn-control-server-frontend:${IMAGE_TAG:-latest}
+    container_name: openvpn-control-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ | grep -q OpenVPN"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    environment:
+      API_URL: ${PUBLIC_BASE_URL:-}
+
+volumes:
+  postgres_data:
+  panel_backups_data:

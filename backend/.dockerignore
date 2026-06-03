@@ -1,7 +1,1 @@
-node_modules
-npm-debug.log
 data
-coverage
-*.test.js
-.env
-.env.*

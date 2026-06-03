@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openvpn-control.fullname" . }}-backend
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  selector:
+    matchLabels:
+      app: {{ include "openvpn-control.fullname" . }}-backend
+  template:
+    metadata:
+      labels:
+        app: {{ include "openvpn-control.fullname" . }}-backend
+    spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          env:
+            - name: PORT
+              value: "8080"
+            - name: PRISMA_MIGRATIONS_DIR
+              value: "/app/prisma/migrations"
+            - name: DATABASE_URL
+              value: "postgresql://{{ .Values.postgres.username }}:{{ .Values.postgres.password }}@{{ include "openvpn-control.fullname" . }}-postgres:5432/{{ .Values.postgres.database }}?schema=public"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openvpn-control.fullname" . }}-secret
+                  key: JWT_SECRET
+            - name: INIT_ADMIN_USERNAME
+              value: {{ .Values.backend.initAdminUsername | quote }}
+            - name: INIT_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openvpn-control.fullname" . }}-secret
+                  key: INIT_ADMIN_PASSWORD
+            - name: PANEL_BACKUP_DIR
+              value: {{ .Values.backend.panelBackupDir | quote }}
+            - name: CORS_ORIGIN
+              value: {{ .Values.backend.env.CORS_ORIGIN | quote }}
+            - name: ALLOWED_HOSTS
+              value: {{ .Values.backend.env.ALLOWED_HOSTS | quote }}
+            - name: CSRF_TRUSTED_ORIGINS
+              value: {{ .Values.backend.env.CSRF_TRUSTED_ORIGINS | quote }}
+            - name: CSRF_PROTECTION_ENABLED
+              value: {{ .Values.backend.env.CSRF_PROTECTION_ENABLED | quote }}
+            - name: LOGIN_MAX_ATTEMPTS
+              value: {{ .Values.backend.env.LOGIN_MAX_ATTEMPTS | quote }}
+            - name: LOGIN_LOCKOUT_MINUTES
+              value: {{ .Values.backend.env.LOGIN_LOCKOUT_MINUTES | quote }}
+            - name: AGENT_SYNC_INTERVAL_MS
+              value: {{ .Values.backend.env.AGENT_SYNC_INTERVAL_MS | quote }}
+            - name: OPENVPN_INFO_SYNC_INTERVAL_MS
+              value: {{ .Values.backend.env.OPENVPN_INFO_SYNC_INTERVAL_MS | quote }}
+            - name: CLIENT_SYNC_INTERVAL_MS
+              value: {{ .Values.backend.env.CLIENT_SYNC_INTERVAL_MS | quote }}
+            - name: CLIENT_SESSION_FRESHNESS_SECONDS
+              value: {{ .Values.backend.env.CLIENT_SESSION_FRESHNESS_SECONDS | quote }}
+            - name: CLIENT_TRAFFIC_HISTORY_MINUTES
+              value: {{ .Values.backend.env.CLIENT_TRAFFIC_HISTORY_MINUTES | quote }}
+            - name: AGENT_METRIC_HISTORY_MINUTES
+              value: {{ .Values.backend.env.AGENT_METRIC_HISTORY_MINUTES | quote }}
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: panel-backups
+              mountPath: /app/data/panel-backups
+      volumes:
+        - name: panel-backups
+          {{- if .Values.backend.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "openvpn-control.fullname" . }}-backend
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

@@ -1,0 +1,74 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+postgres:
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  database: openvpn_control
+  username: postgres
+  password: "change_me_db_password"
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+  service:
+    type: ClusterIP
+    port: 5432
+
+backend:
+  replicas: 1
+  image:
+    repository: ghcr.io/openvpn-control/openvpn-control-server-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  jwtSecret: "change_me_long_random_secret"
+  initAdminUsername: admin
+  initAdminPassword: "change_me_admin_password"
+  panelBackupDir: /app/data/panel-backups
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+  env:
+    CORS_ORIGIN: "http://localhost:8080"
+    ALLOWED_HOSTS: ""
+    CSRF_TRUSTED_ORIGINS: "http://localhost:8080"
+    CSRF_PROTECTION_ENABLED: "true"
+    LOGIN_MAX_ATTEMPTS: "8"
+    LOGIN_LOCKOUT_MINUTES: "15"
+    AGENT_SYNC_INTERVAL_MS: "2000"
+    OPENVPN_INFO_SYNC_INTERVAL_MS: "5000"
+    CLIENT_SYNC_INTERVAL_MS: "2000"
+    CLIENT_SESSION_FRESHNESS_SECONDS: "15"
+    CLIENT_TRAFFIC_HISTORY_MINUTES: "15"
+    AGENT_METRIC_HISTORY_MINUTES: "15"
+
+frontend:
+  replicas: 1
+  image:
+    repository: ghcr.io/openvpn-control/openvpn-control-server-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    API_URL: ""
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: openvpn-control.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []

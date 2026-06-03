@@ -1,35 +1,23 @@
-# Prod: только runtime-зависимости + Prisma CLI для migrate при старте.
-FROM node:20-alpine AS build
+FROM golang:1.22-alpine AS build
+
+WORKDIR /src
+RUN apk add --no-cache git
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/server ./cmd/server
+
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates wget
 
 WORKDIR /app
-
-COPY package*.json prisma ./
-RUN npm ci \
-  && npx prisma generate \
-  && npm cache clean --force
-
-FROM node:20-alpine
-
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-RUN apk add --no-cache openssl libc6-compat wget
-
-COPY package*.json ./
-RUN npm ci --omit=dev \
-  && npm cache clean --force
-
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/node_modules/@prisma/client ./node_modules/@prisma/client
-COPY --from=build /app/node_modules/prisma ./node_modules/prisma
-COPY --from=build /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
-
+COPY --from=build /out/server /app/server
 COPY prisma ./prisma
-COPY src ./src
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
+
+ENV PRISMA_MIGRATIONS_DIR=/app/prisma/migrations
 
 EXPOSE 8080
-ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["node", "src/index.js"]
+ENTRYPOINT ["/app/server"]

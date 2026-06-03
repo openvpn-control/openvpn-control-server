@@ -18,7 +18,8 @@ Include: description, impact, affected area (UI, API, etc.), steps to reproduce 
 Before exposing the panel to the internet:
 
 - Strong `JWT_SECRET`, database password, initial admin password — no demo defaults.
-- HTTPS; align `CORS_ORIGIN`, `CSRF_TRUSTED_ORIGINS`, and `ALLOWED_HOSTS` with your real URL.
+- При прокси API через frontend (same-origin) CORS на backend не нужен (`CORS_PROTECTION_ENABLED=false`).
+- Если API доступен браузеру с другого origin — включите `CORS_PROTECTION_ENABLED` и задайте `CORS_ORIGIN` / `CSRF_TRUSTED_ORIGINS`.
 - Restrict network access where possible; keep dependencies and images updated.
 
 See [README.md](README.md#развёртывание-у-себя-self-host) for a short checklist.
