@@ -1,0 +1,61 @@
+# Сборка edge-nginx → GitLab Container Registry.
+#
+# Теги (совместимы с openvpn-control/docker-compose.yml):
+#   <registry-parent>/openvpn-control-server-nginx:<sha|v*>
+#   <registry-parent>/openvpn-control-server-nginx-certbot:<sha|v*>
+#
+# Пример .env в openvpn-control:
+#   IMAGE_REGISTRY=registry.gitlab.com/your-group
+#   IMAGE_TAG=abc1234
+
+stages:
+  - build
+
+variables:
+  DOCKER_TLS_CERTDIR: "/certs"
+  NGINX_IMAGE: openvpn-control-server-nginx
+  NGINX_CERTBOT_IMAGE: openvpn-control-server-nginx-certbot
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH
+
+build-nginx:
+  stage: build
+  image: docker:27-cli
+  services:
+    - docker:27-dind
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - when: on_success
+  before_script:
+    - docker info
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - |
+      if [ -n "${CI_COMMIT_TAG}" ]; then
+        IMAGE_TAG="${CI_COMMIT_TAG}"
+        ALSO_LATEST="true"
+      else
+        IMAGE_TAG="${CI_COMMIT_SHORT_SHA}"
+        ALSO_LATEST="false"
+      fi
+      REG_PARENT="${CI_REGISTRY_IMAGE%/*}"
+      IMG_NGINX="${REG_PARENT}/${NGINX_IMAGE}"
+      IMG_CERTBOT="${REG_PARENT}/${NGINX_CERTBOT_IMAGE}"
+      echo "Building ${IMG_NGINX}:${IMAGE_TAG}"
+      docker build -f nginx/Dockerfile -t "${IMG_NGINX}:${IMAGE_TAG}" nginx
+      docker push "${IMG_NGINX}:${IMAGE_TAG}"
+      echo "Building ${IMG_CERTBOT}:${IMAGE_TAG}"
+      docker build -f nginx/Dockerfile.certbot -t "${IMG_CERTBOT}:${IMAGE_TAG}" nginx
+      docker push "${IMG_CERTBOT}:${IMAGE_TAG}"
+      if [ "${ALSO_LATEST}" = "true" ] && echo "${IMAGE_TAG}" | grep -q '^v'; then
+        docker tag "${IMG_NGINX}:${IMAGE_TAG}" "${IMG_NGINX}:latest"
+        docker push "${IMG_NGINX}:latest"
+        docker tag "${IMG_CERTBOT}:${IMAGE_TAG}" "${IMG_CERTBOT}:latest"
+        docker push "${IMG_CERTBOT}:latest"
+      fi
+      echo "Published ${IMG_NGINX}:${IMAGE_TAG}"
+      echo "Published ${IMG_CERTBOT}:${IMAGE_TAG}"

@@ -51,6 +51,8 @@ jobs:
           owner_repo="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           echo "IMAGE_BACKEND=${{ env.REGISTRY }}/${owner_repo}-backend" >> "$GITHUB_ENV"
           echo "IMAGE_FRONTEND=${{ env.REGISTRY }}/${owner_repo}-frontend" >> "$GITHUB_ENV"
+          echo "IMAGE_NGINX=${{ env.REGISTRY }}/${owner_repo}-nginx" >> "$GITHUB_ENV"
+          echo "IMAGE_NGINX_CERTBOT=${{ env.REGISTRY }}/${owner_repo}-nginx-certbot" >> "$GITHUB_ENV"
 
       - name: Optional Docker Hub targets
         id: hub
@@ -60,6 +62,8 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
             echo "backend=docker.io/${prefix}-backend" >> "$GITHUB_OUTPUT"
             echo "frontend=docker.io/${prefix}-frontend" >> "$GITHUB_OUTPUT"
+            echo "nginx=docker.io/${prefix}-nginx" >> "$GITHUB_OUTPUT"
+            echo "nginx_certbot=docker.io/${prefix}-nginx-certbot" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
@@ -140,6 +144,50 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Docker meta (nginx)
+        id: meta_nginx
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NGINX }}
+          tags: |
+            type=raw,value=${{ steps.tag.outputs.value }}
+            type=raw,value=latest,enable=${{ steps.tag.outputs.is_release == 'true' && startsWith(steps.tag.outputs.value, 'v') }}
+          flavor: |
+            latest=false
+
+      - name: Build and push nginx
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nginx
+          file: ./nginx/Dockerfile
+          push: true
+          tags: ${{ steps.meta_nginx.outputs.tags }}
+          labels: ${{ steps.meta_nginx.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Docker meta (nginx-certbot)
+        id: meta_nginx_certbot
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NGINX_CERTBOT }}
+          tags: |
+            type=raw,value=${{ steps.tag.outputs.value }}
+            type=raw,value=latest,enable=${{ steps.tag.outputs.is_release == 'true' && startsWith(steps.tag.outputs.value, 'v') }}
+          flavor: |
+            latest=false
+
+      - name: Build and push nginx-certbot
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nginx
+          file: ./nginx/Dockerfile.certbot
+          push: true
+          tags: ${{ steps.meta_nginx_certbot.outputs.tags }}
+          labels: ${{ steps.meta_nginx_certbot.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Mirror to Docker Hub (optional)
         if: steps.hub.outputs.enabled == 'true'
         env:
@@ -152,9 +200,13 @@ jobs:
           set -eux
           docker buildx imagetools create --tag "${DST_BACKEND}:${TAG}" "${SRC_BACKEND}:${TAG}"
           docker buildx imagetools create --tag "${DST_FRONTEND}:${TAG}" "${SRC_FRONTEND}:${TAG}"
+          docker buildx imagetools create --tag "${{ steps.hub.outputs.nginx }}:${TAG}" "${{ env.IMAGE_NGINX }}:${TAG}"
+          docker buildx imagetools create --tag "${{ steps.hub.outputs.nginx_certbot }}:${TAG}" "${{ env.IMAGE_NGINX_CERTBOT }}:${TAG}"
           if [[ "${{ steps.tag.outputs.is_release }}" == "true" && "${TAG}" == v* ]]; then
             docker buildx imagetools create --tag "${DST_BACKEND}:latest" "${SRC_BACKEND}:${TAG}"
             docker buildx imagetools create --tag "${DST_FRONTEND}:latest" "${SRC_FRONTEND}:${TAG}"
+            docker buildx imagetools create --tag "${{ steps.hub.outputs.nginx }}:latest" "${{ env.IMAGE_NGINX }}:${TAG}"
+            docker buildx imagetools create --tag "${{ steps.hub.outputs.nginx_certbot }}:latest" "${{ env.IMAGE_NGINX_CERTBOT }}:${TAG}"
           fi
 
       - name: Draft release (образы в GHCR)
@@ -163,10 +215,14 @@ jobs:
           TAG: ${{ steps.tag.outputs.value }}
           IMAGE_BACKEND: ${{ env.IMAGE_BACKEND }}
           IMAGE_FRONTEND: ${{ env.IMAGE_FRONTEND }}
+          IMAGE_NGINX: ${{ env.IMAGE_NGINX }}
+          IMAGE_NGINX_CERTBOT: ${{ env.IMAGE_NGINX_CERTBOT }}
         run: |
           set -eux
           digest_backend="$(docker buildx imagetools inspect "${IMAGE_BACKEND}:${TAG}" | awk '/Digest:/ {print $2; exit}')"
           digest_frontend="$(docker buildx imagetools inspect "${IMAGE_FRONTEND}:${TAG}" | awk '/Digest:/ {print $2; exit}')"
+          digest_nginx="$(docker buildx imagetools inspect "${IMAGE_NGINX}:${TAG}" | awk '/Digest:/ {print $2; exit}')"
+          digest_nginx_certbot="$(docker buildx imagetools inspect "${IMAGE_NGINX_CERTBOT}:${TAG}" | awk '/Digest:/ {print $2; exit}')"
           {
             echo "## Образы (GHCR)"
             echo
@@ -183,10 +239,19 @@ jobs:
             echo "- \`${IMAGE_FRONTEND}:${TAG}\`"
             echo "- digest: \`${digest_frontend}\`"
             echo
+            echo "### Nginx (edge)"
+            echo "- \`${IMAGE_NGINX}:${TAG}\`"
+            echo "- digest: \`${digest_nginx}\`"
+            echo
+            echo "### Nginx + certbot"
+            echo "- \`${IMAGE_NGINX_CERTBOT}:${TAG}\`"
+            echo "- digest: \`${digest_nginx_certbot}\`"
+            echo
             echo "### Пример pull"
             echo "\`\`\`"
             echo "docker pull ${IMAGE_BACKEND}:${TAG}"
             echo "docker pull ${IMAGE_FRONTEND}:${TAG}"
+            echo "docker pull ${IMAGE_NGINX}:${TAG}"
             echo "\`\`\`"
           } > release-body.md
           {
@@ -194,6 +259,10 @@ jobs:
             echo "BACKEND_DIGEST=${digest_backend}"
             echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${TAG}"
             echo "FRONTEND_DIGEST=${digest_frontend}"
+            echo "NGINX_IMAGE=${IMAGE_NGINX}:${TAG}"
+            echo "NGINX_DIGEST=${digest_nginx}"
+            echo "NGINX_CERTBOT_IMAGE=${IMAGE_NGINX_CERTBOT}:${TAG}"
+            echo "NGINX_CERTBOT_DIGEST=${digest_nginx_certbot}"
           } > container-images.env
 
       - name: Publish draft release

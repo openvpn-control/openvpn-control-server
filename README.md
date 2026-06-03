@@ -93,6 +93,8 @@ Helm-чарт в этом репозитории не поставляется. 
 - **push в любую ветку** — тег = короткий SHA коммита (7 символов), например `a1b2c3d`:
   - `ghcr.io/<владелец>/<репозиторий>-backend:a1b2c3d`
   - `ghcr.io/<владелец>/<репозиторий>-frontend:a1b2c3d`
+  - `ghcr.io/<владелец>/<репозиторий>-nginx:a1b2c3d`
+  - `ghcr.io/<владелец>/<репозиторий>-nginx-certbot:a1b2c3d`
 - **push git-тега** `v*` — тег релиза (`v1.2.3`) и дополнительно `latest` для тегов вида `v…`
 
 Ручной запуск: **Actions → Docker publish → Run workflow** (произвольный тег в input).
@@ -100,6 +102,8 @@ Helm-чарт в этом репозитории не поставляется. 
 **Settings → Actions → General:** для публикации в GHCR обычно нужны **Read and write** для `GITHUB_TOKEN`. Пакеты сделайте Public или используйте `docker login ghcr.io`.
 
 Закомментированный пример входа в Docker Hub: [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml).
+
+**GitLab:** [.gitlab-ci.yml](.gitlab-ci.yml) — job `build-nginx` (образы `openvpn-control-server-nginx` и `-nginx-certbot` в Container Registry проекта).
 
 **Бинарники агента** собираются в отдельном репозитории **openvpn-control-agent** (релизы с приложенными файлами).
 
