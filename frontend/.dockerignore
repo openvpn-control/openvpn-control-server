@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+*.test.ts
+*.test.tsx
+.env
+.env.*

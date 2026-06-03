@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Firefox JS check</title>
+  </head>
+  <body>
+    <h1>Firefox JavaScript check</h1>
+    <ul>
+      <li id="inline">inline: pending</li>
+    </ul>
+    <p>
+      Панель отдаёт скрипт <strong>внутри index.html</strong> (без отдельного .js). Если здесь
+      «inline: OK», откройте <a href="/">главную</a>. Скрипты панели: <code>/static/*.js</code> (не <code>/assets/</code>).
+    </p>
+    <script>
+      document.getElementById("inline").textContent = "inline: OK";
+    </script>
+  </body>
+</html>

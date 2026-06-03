@@ -70,6 +70,13 @@ export const config = {
   panelBackupDir: process.env.PANEL_BACKUP_DIR || path.join(process.cwd(), "data", "panel-backups"),
   /** Разрешенные Origin для CORS, CSV (например: https://panel.example.com,https://admin.example.com). */
   corsOrigins: parseCorsOrigins(process.env.CORS_ORIGIN || "http://localhost:5173"),
+  /** URL веб-панели (подсказка на GET / API). */
+  panelUrl: (() => {
+    const explicit = String(process.env.PANEL_URL || "").trim();
+    if (explicit) return explicit.replace(/\/+$/, "");
+    const origins = parseCorsOrigins(process.env.CORS_ORIGIN || "http://localhost:5173");
+    return origins[0] || "http://localhost:5173";
+  })(),
   /** Допустимые Origin для CSRF-проверки state-changing запросов. По умолчанию = CORS_ORIGIN. */
   csrfTrustedOrigins: parseCorsOrigins(process.env.CSRF_TRUSTED_ORIGINS || process.env.CORS_ORIGIN || "http://localhost:5173"),
   csrfProtectionEnabled: parseBool(process.env.CSRF_PROTECTION_ENABLED, true),

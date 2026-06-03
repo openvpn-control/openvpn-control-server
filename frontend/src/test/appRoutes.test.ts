@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAppRoute, paths } from "../appRoutes.js";
+import { parseAppRoute, paths } from "../appRoutes";
 
 describe("appRoutes", () => {
   it("parses organization firewall tab", () => {

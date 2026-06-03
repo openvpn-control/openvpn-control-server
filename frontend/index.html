@@ -4,33 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenVPN Control</title>
-    <style>
-      .boot-fallback {
-        font-family: system-ui, sans-serif;
-        max-width: 42rem;
-        margin: 2rem auto;
-        padding: 0 1rem;
-        line-height: 1.5;
-        color: #1a1a1a;
-      }
-    </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"
-      rel="stylesheet"
-    />
+    <script type="module" src="/src/main.tsx"></script>
   </head>
   <body>
-    <div id="root">
-      <p class="boot-fallback">
-        Загрузка панели… Если экран остаётся пустым в Firefox: откройте
-        <code>http://localhost:5173</code> в обычной вкладке (не во встроенном просмотрщике),
-        отключите блокировку скриптов для localhost (NoScript, uBlock и т.п.) или запустите
-        «Режим устранения неполадок» (меню → Справка).
-      </p>
-    </div>
-    <script src="/env-config.js"></script>
-    <script type="module" src="/src/main.jsx"></script>
+    <div id="root"></div>
   </body>
 </html>

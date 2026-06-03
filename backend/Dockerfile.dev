@@ -1,0 +1,21 @@
+# Dev: зависимости и Prisma Client в образе; при старте только migrate + dev.
+FROM node:20-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache openssl libc6-compat wget
+
+COPY package*.json ./
+RUN npm ci \
+  && npm cache clean --force
+
+COPY prisma ./prisma
+RUN npx prisma generate
+
+COPY docker-dev-entrypoint.sh /docker-dev-entrypoint.sh
+RUN sed -i 's/\r$//' /docker-dev-entrypoint.sh && chmod +x /docker-dev-entrypoint.sh
+
+ENV NODE_ENV=development
+
+EXPOSE 8080
+ENTRYPOINT ["/docker-dev-entrypoint.sh"]

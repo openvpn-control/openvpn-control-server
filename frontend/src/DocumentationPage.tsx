@@ -1,4 +1,5 @@
-import { paths } from "./appRoutes.js";
+import type { NavigateFunction } from "react-router-dom";
+import { paths } from "./appRoutes";
 
 const SECTIONS = [
   { id: "intro", label: "Введение" },
@@ -694,7 +695,12 @@ function DocBody({ section, navigate }) {
 /**
  * Пользовательская документация: оглавление в стиле resource-sidebar и HTML-разметка разделов.
  */
-export function DocumentationPage({ section, navigate }) {
+interface DocumentationPageProps {
+  section: string;
+  navigate: NavigateFunction;
+}
+
+export function DocumentationPage({ section, navigate }: DocumentationPageProps) {
   return (
     <div className="resource-layout">
       <aside className="resource-sidebar" aria-label="Оглавление документации">

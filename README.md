@@ -6,7 +6,7 @@
 
 ## Состав
 
-- `frontend` — панель (React + Vite)
+- `frontend` — панель (React + TypeScript, сборка Vite → nginx)
 - `backend` — API (Express + Prisma)
 
 ## Быстрый старт (локально)
@@ -17,13 +17,48 @@
 # backend
 cd backend && npm install && npm run dev
 
-# frontend (в другом терминале)
-cd frontend && npm install
-VITE_API_URL=http://localhost:8080 npm run dev
+# frontend (сборка + любой статический сервер, либо Docker ниже)
+cd frontend && npm install && npm run build
+# затем отдайте dist/ через nginx или docker compose
 ```
 
-- Frontend: `http://localhost:5173`
-- Backend: `http://localhost:8080`
+- Панель: `http://localhost/` (через edge nginx) или `:5173` с override `docker-compose.direct.yml`
+- Backend: `http://localhost/api/...` (через edge) или `:8080` (curl напрямую)
+
+### Docker Compose (режим разработки)
+
+Из каталога `openvpn-control-server`:
+
+```bash
+docker compose up --build
+```
+
+Поднимаются PostgreSQL, backend, frontend (внутренняя сеть) и **edge nginx** (порты 80/443). Зависимости backend ставятся **при сборке образа**, не при каждом `up`. SSL: лёгкий nginx по умолчанию; certbot — `docker compose -f docker-compose.yml -f docker-compose.ssl.yml up`. См. [nginx/README.md](nginx/README.md).
+
+После смены `package.json` / `package-lock.json`: `docker compose build backend`. С принудительным `npm ci` в контейнере: `DEPS_REFRESH=1 docker compose up -d backend`.
+
+- Панель: **`http://localhost/`**
+- API с браузера: **`http://localhost/api/...`**
+- HTTPS (прод): задайте `CERTBOT_PRIMARY_DOMAIN` и `CERTBOT_EMAIL` в `.env` → **`https://домен/`** и **`https://домен/api/...`**
+
+Прямой доступ к панели на `:5173` (как раньше):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.direct.yml up --build
+```
+- Переменные: [.env.example](.env.example) → `.env`
+- Схема портов: [docs/PORTS-AND-API.md](docs/PORTS-AND-API.md)
+- Остановка: `docker compose down` (данные БД в томе `postgres_data_dev`)
+
+**Firefox: пустая страница, в HAR скрипты `status: 0`** — не баг сборки. Подробно: [docs/FIREFOX-LOCALHOST.md](docs/FIREFOX-LOCALHOST.md).
+
+Кратко:
+
+1. Замок → **Разрешения** → **Выполнять JavaScript** = **Разрешить** для localhost.
+2. В Network Firefox — только `GET /` (скрипт встроен в HTML). Диагностика: `http://localhost:5173/firefox-check.html`.
+3. Тот же URL в Chrome / Cursor — если там работает, правите Firefox / антивирус.
+
+Продакшен-образы из GHCR — в каталоге **openvpn-control** (`docker-compose.yml`, Helm).
 
 ### Docker / Kubernetes
 
@@ -31,8 +66,7 @@ VITE_API_URL=http://localhost:8080 npm run dev
 
 Адрес API для панели:
 
-- **Локальная разработка** (`npm run dev`): переменная `VITE_API_URL` в окружении (см. пример выше).
-- **Docker / Kubernetes**: `API_URL` при старте контейнера frontend (в `.env` каталога `openvpn-control` или в Helm values).
+- **Docker / Kubernetes**: `API_URL` при старте контейнера frontend → атрибут `data-api-url` в `index.html` (см. `docker-entrypoint.sh`).
 
 ## Развёртывание у себя (self-host)
 
@@ -68,24 +102,6 @@ Helm-чарт в этом репозитории не поставляется. 
 Закомментированный пример входа в Docker Hub: [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml).
 
 **Бинарники агента** собираются в отдельном репозитории **openvpn-control-agent** (релизы с приложенными файлами).
-
-### Firefox: пустая страница и CSP в консоли
-
-Образ frontend **не** выставляет `script-src 'none'`. Если в консоли Firefox одновременно видны `script-src 'none'` и `script-src 'self'`, вторая политика обычно добавляется **расширением** (NoScript, uBlock и др.) или страница открыта во **встроенном sandbox** (некоторые IDE/просмотрщики).
-
-Проверка, что ответ контейнера без лишнего CSP:
-
-```bash
-curl -sI http://localhost:5173/ | grep -i content-security
-```
-
-Пустой вывод — заголовка CSP от nginx нет; блокировка на стороне браузера/расширения.
-
-Что сделать:
-
-1. Открыть `http://localhost:5173` в **новой обычной вкладке** Firefox (не встроенный браузер).
-2. **Меню → Справка → Режим устранения неполадок** — перезапуск без расширений; если панель загрузилась, добавьте исключение для `localhost` в блокировщике скриптов.
-3. В NoScript: разрешить скрипты для `localhost` / `127.0.0.1`.
 
 ## Функции (обзор)
 

@@ -2,9 +2,12 @@
 set -e
 
 INDEX="/usr/share/nginx/html/index.html"
-API_URL="${API_URL:-http://localhost:8080}"
-# HTML attribute value: escape & and " for index.html
-escaped=$(printf '%s' "$API_URL" | sed 's/&/\&amp;/g; s/"/\&quot;/g')
+# Пустой data-api-url → браузер использует тот же origin (/api на edge nginx)
+API_URL="${API_URL:-}"
+html_esc=$(printf '%s' "$API_URL" | sed 's/&/\&amp;/g; s/"/\&quot;/g')
 
-sed -i "s|data-api-url=\"\"|data-api-url=\"${escaped}\"|" "$INDEX"
+if [ -n "$API_URL" ]; then
+  sed -i "s|data-api-url=\"\"|data-api-url=\"${html_esc}\"|" "$INDEX"
+fi
+rm -f /usr/share/nginx/html/env-config.js
 exec nginx -g 'daemon off;'

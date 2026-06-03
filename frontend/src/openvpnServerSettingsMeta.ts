@@ -1,8 +1,10 @@
+import type { SettingsFieldMeta } from "./types/settingsMeta";
+
 /**
  * Метаданные полей server.conf, синхронизированные с агентом (managed directives).
  * key — имя директивы OpenVPN (в нижнем регистре).
  */
-export const OPENVPN_SERVER_SETTINGS_FIELDS = [
+export const OPENVPN_SERVER_SETTINGS_FIELDS: SettingsFieldMeta[] = [
   {
     key: "port",
     label: "Порт",

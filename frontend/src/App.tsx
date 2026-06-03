@@ -1,10 +1,11 @@
+// @ts-nocheck — постепенная типизация; сборка Vite не зависит от tsc.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { parseAppRoute, paths } from "./appRoutes.js";
-import { DocumentationPage } from "./DocumentationPage.jsx";
-import { OPENVPN_SERVER_SETTINGS_FIELDS } from "./openvpnServerSettingsMeta.js";
-import { OPENVPN_CLIENT_SETTINGS_FIELDS } from "./openvpnClientSettingsMeta.js";
-import MonitoringCharts from "./MonitoringCharts.jsx";
+import { parseAppRoute, paths } from "./appRoutes";
+import { DocumentationPage } from "./DocumentationPage";
+import { OPENVPN_SERVER_SETTINGS_FIELDS } from "./openvpnServerSettingsMeta";
+import { OPENVPN_CLIENT_SETTINGS_FIELDS } from "./openvpnClientSettingsMeta";
+import MonitoringCharts from "./MonitoringCharts";
 
 const PANEL_ONLY_OPENVPN_KEYS = new Set([
   "panelRootCaId",
@@ -242,7 +243,7 @@ function fallbackServerDerivedClientLines(serverSettings) {
   return out;
 }
 
-import { API_URL } from "./apiConfig.js";
+import { API_URL } from "./apiConfig";
 const TOKEN_STORAGE_KEY = "ovpn_control_admin_token";
 const SESSION_INVALID_EVENT = "ovpn:session-invalid";
 const DISCONNECTING_SESSIONS_STORAGE_KEY = "ovpn:disconnecting-sessions";

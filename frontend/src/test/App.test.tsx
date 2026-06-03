@@ -1,8 +1,9 @@
-import "./matchMedia-polyfill.js";
+/// <reference types="vitest/globals" />
+import "./matchMedia-polyfill";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import App from "../App.jsx";
+import App from "../App";
 
 const memoryRouterFuture = { v7_startTransition: true, v7_relativeSplatPath: true };
 

@@ -86,7 +86,24 @@ function useUplot(containerRef, optionsFactory, data, onCursor) {
   return plotRef;
 }
 
-function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel, legendRows }) {
+interface ChartPanelProps {
+  title: string;
+  yMax: number;
+  yTicks: number[];
+  yFormat: (v: number) => string;
+  series: Array<{
+    label: string;
+    color: string;
+    fill?: string;
+    getter: (r: Record<string, unknown>) => number;
+    valueFormat: (v: number) => string;
+  }>;
+  samples: Array<Record<string, unknown>>;
+  limitLabel?: string;
+  legendRows?: Array<Array<{ label: string; value?: string; swatch?: string }>>;
+}
+
+function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel, legendRows }: ChartPanelProps) {
   const holderRef = useRef(null);
   const [hover, setHover] = useState(null);
   const chart = useMemo(() => toChartSeries(samples, series.map((s) => s.getter)), [samples, series]);
@@ -204,7 +221,12 @@ function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel,
   );
 }
 
-export default function MonitoringCharts({ samples, current }) {
+interface MonitoringChartsProps {
+  samples?: Array<Record<string, unknown>>;
+  current?: Record<string, unknown>;
+}
+
+export default function MonitoringCharts({ samples, current }: MonitoringChartsProps) {
   const safeSamples = Array.isArray(samples) ? samples : [];
   const safeMin = (vals) => {
     const arr = (vals || []).filter((v) => Number.isFinite(v));
@@ -214,9 +236,10 @@ export default function MonitoringCharts({ samples, current }) {
     const arr = (vals || []).filter((v) => Number.isFinite(v));
     return arr.length ? Math.max(...arr) : 0;
   };
-  const cpuMin = Math.min(safeMin(safeSamples.map((s) => Number(s.cpuPercent || 0))), 0);
-  const cpuMax = Math.max(safeMax(safeSamples.map((s) => Number(s.cpuPercent || 0))), Number(current?.cpuPercent || 0), 0);
-  const cpuCur = Number(current?.cpuPercent || 0);
+  const num = (v: unknown) => Number(v ?? 0);
+  const cpuMin = Math.min(safeMin(safeSamples.map((s) => num(s.cpuPercent))), 0);
+  const cpuMax = Math.max(safeMax(safeSamples.map((s) => num(s.cpuPercent))), num(current?.cpuPercent), 0);
+  const cpuCur = num(current?.cpuPercent);
   const ramMin = Math.min(safeMin(safeSamples.map((s) => Number(s.memoryPercent || 0))), 0);
   const ramMax = Math.max(safeMax(safeSamples.map((s) => Number(s.memoryPercent || 0))), Number(current?.memoryPercent || 0), 0);
   const ramCur = Number(current?.memoryPercent || 0);
@@ -240,7 +263,7 @@ export default function MonitoringCharts({ samples, current }) {
         yFormat={(v) => `${Math.round(v)}%`}
         samples={safeSamples}
         series={[
-          { label: "CPU", color: "#e59649", fill: "#efd7bc55", getter: (r) => r.cpuPercent, valueFormat: (v) => `${Math.round(v)}%` },
+          { label: "CPU", color: "#e59649", fill: "#efd7bc55", getter: (r) => Number(r.cpuPercent ?? 0), valueFormat: (v) => `${Math.round(v)}%` },
         ]}
         legendRows={[
           [
@@ -259,7 +282,7 @@ export default function MonitoringCharts({ samples, current }) {
         yFormat={(v) => `${Math.round(v)}%`}
         samples={safeSamples}
         series={[
-          { label: "RAM", color: "#22c55e", fill: "#bbf7d055", getter: (r) => r.memoryPercent, valueFormat: (v) => `${Math.round(v)}%` },
+          { label: "RAM", color: "#22c55e", fill: "#bbf7d055", getter: (r) => Number(r.memoryPercent ?? 0), valueFormat: (v) => `${Math.round(v)}%` },
         ]}
         legendRows={[
           [
@@ -278,8 +301,8 @@ export default function MonitoringCharts({ samples, current }) {
         yFormat={(v) => (v === 0 ? "0 Bps" : `${Math.round(v / (1000 * 1000))} MBps`)}
         samples={safeSamples}
         series={[
-          { label: "Disk read", color: "#22a3de", fill: "#c4e8f833", getter: (r) => r.diskReadBps, valueFormat: fmtRate },
-          { label: "Disk write", color: "#ef6f63", fill: "#f6c9c233", getter: (r) => r.diskWriteBps, valueFormat: fmtRate },
+          { label: "Disk read", color: "#22a3de", fill: "#c4e8f833", getter: (r) => Number(r.diskReadBps ?? 0), valueFormat: fmtRate },
+          { label: "Disk write", color: "#ef6f63", fill: "#f6c9c233", getter: (r) => Number(r.diskWriteBps ?? 0), valueFormat: fmtRate },
         ]}
         legendRows={[
           [
@@ -304,8 +327,8 @@ export default function MonitoringCharts({ samples, current }) {
         yFormat={(v) => `${Math.round(v / (1000 * 1000))} Mbps`}
         samples={safeSamples}
         series={[
-          { label: "Bandwidth in", color: "#0d94a7", fill: "#b7e7ea2e", getter: (r) => r.networkInBps, valueFormat: fmtRate },
-          { label: "Bandwidth out", color: "#7681e7", fill: "#ced3ff2e", getter: (r) => r.networkOutBps, valueFormat: fmtRate },
+          { label: "Bandwidth in", color: "#0d94a7", fill: "#b7e7ea2e", getter: (r) => Number(r.networkInBps ?? 0), valueFormat: fmtRate },
+          { label: "Bandwidth out", color: "#7681e7", fill: "#ced3ff2e", getter: (r) => Number(r.networkOutBps ?? 0), valueFormat: fmtRate },
         ]}
         legendRows={[
           [

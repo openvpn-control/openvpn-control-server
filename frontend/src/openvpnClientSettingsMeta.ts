@@ -1,4 +1,6 @@
-export const OPENVPN_CLIENT_SETTINGS_FIELDS = [
+import type { SettingsFieldMeta } from "./types/settingsMeta";
+
+export const OPENVPN_CLIENT_SETTINGS_FIELDS: SettingsFieldMeta[] = [
   {
     key: "client",
     label: "Директива client в .ovpn",

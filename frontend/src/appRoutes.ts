@@ -30,23 +30,46 @@ const DOCUMENTATION_SECTIONS = new Set([
   "troubleshooting",
 ]);
 
-function pickTab(value, allowed, fallback) {
+export interface AppRouteState {
+  primaryNav: string;
+  serversView: string;
+  selectedServerId: string;
+  serverDetailTab: string;
+  serverCenterCertId: string;
+  organizationsView: string;
+  organizationEditId: string;
+  organizationEditTab: string;
+  usersSub: string;
+  selectedUserId: string;
+  userProfileTab: string;
+  caRootWizard: string | null;
+  selectedRootCaId: string;
+  selectedCertId: string;
+  rootCaProfileTab: string;
+  certProfileTab: string;
+  adminsPage: string;
+  selectedAdminId: string;
+  tasksView: string;
+  logsView: string;
+  docsSection: string;
+  settingsSection: string;
+  inviteAdminToken: string;
+  resetAdminPasswordToken: string;
+}
+
+function pickTab(value: string | null, allowed: Set<string>, fallback: string): string {
   const v = String(value || "").trim();
   return allowed.has(v) ? v : fallback;
 }
 
-function withQuery(base, tabKey, tabVal, defaultTab) {
+function withQuery(base: string, tabKey: string, tabVal: string, defaultTab: string): string {
   if (!tabVal || tabVal === defaultTab) return base;
   const q = new URLSearchParams();
   q.set(tabKey, tabVal);
   return `${base}?${q.toString()}`;
 }
 
-/**
- * @param {string} pathname
- * @param {string} search
- */
-export function parseAppRoute(pathname, search) {
+export function parseAppRoute(pathname: string, search: string): AppRouteState {
   const sp = new URLSearchParams(search);
   const path = pathname.replace(/\/+$/, "") || "/";
   const seg = path.split("/").filter(Boolean);

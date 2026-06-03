@@ -1,0 +1,8 @@
+# Fallback when certs are not ready yet (optional duplicate of entrypoint http block)
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 301 https://$host$request_uri; }
+}

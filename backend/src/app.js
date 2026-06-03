@@ -34,6 +34,8 @@ export function createApp() {
     }),
   );
   app.use((req, res, next) => {
+    if (req.path === "/health") return next();
+
     const hostHeader = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim().toLowerCase();
     if (hostHeader && allowedHosts.size > 0 && !allowedHosts.has(hostHeader)) {
       return res.status(403).json({ error: "Host is not allowed" });
@@ -53,6 +55,27 @@ export function createApp() {
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.get("/", (_req, res) => {
+    const panel = config.panelUrl;
+    const accept = String(_req.headers.accept || "");
+    if (accept.includes("text/html")) {
+      res.status(200).type("html").send(
+        `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>OpenVPN Control API</title></head>` +
+          `<body style="font-family:system-ui,sans-serif;max-width:40em;margin:2rem auto;line-height:1.5">` +
+          `<h1>Это API backend</h1><p>Веб-панель открывайте по адресу: <a href="${panel}">${panel}</a></p>` +
+          `<p>Проверка API: <a href="/health">/health</a></p></body></html>`,
+      );
+      return;
+    }
+    res.status(200).json({
+      service: "openvpn-control-api",
+      message: "Web panel is not served on this port. Open the panel URL in a browser.",
+      panelUrl: panel,
+      health: "/health",
+      apiPrefix: "/api",
+    });
   });
 
   app.use("/api/auth", authRoutes);
