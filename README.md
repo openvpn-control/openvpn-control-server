@@ -54,12 +54,14 @@ Helm-чарт в этом репозитории не поставляется. 
 
 ## Релизы: образы Docker (GitHub Actions)
 
-При **push тега** `v*` воркфлоу **Docker publish** пушит в **ghcr.io** (имена в нижнем регистре):
+Воркфлоу **Docker publish** пушит в **ghcr.io** (имена в нижнем регистре):
 
-- `ghcr.io/<владелец>/<репозиторий>-backend:<тег>` (+ `latest` для тегов вида `v…`)
-- `ghcr.io/<владелец>/<репозиторий>-frontend:<тег>`
+- **push в любую ветку** — тег = короткий SHA коммита (7 символов), например `a1b2c3d`:
+  - `ghcr.io/<владелец>/<репозиторий>-backend:a1b2c3d`
+  - `ghcr.io/<владелец>/<репозиторий>-frontend:a1b2c3d`
+- **push git-тега** `v*` — тег релиза (`v1.2.3`) и дополнительно `latest` для тегов вида `v…`
 
-Ручной запуск: **Actions → Docker publish → Run workflow**.
+Ручной запуск: **Actions → Docker publish → Run workflow** (произвольный тег в input).
 
 **Settings → Actions → General:** для публикации в GHCR обычно нужны **Read and write** для `GITHUB_TOKEN`. Пакеты сделайте Public или используйте `docker login ghcr.io`.
 

@@ -1,9 +1,12 @@
 # Собирает backend и frontend и публикует образы в GitHub Container Registry (ghcr.io).
-# Тег образа = git-тег (например v1.2.3); для тегов v* дополнительно пушится :latest.
-# После push создаётся черновик GitHub Release с перечислением образов и дайджестов.
+# Теги образов:
+#   - push в любую ветку → короткий SHA коммита (например a1b2c3d);
+#   - push git-тега v* → имя тега (v1.2.3) и дополнительно :latest;
+#   - workflow_dispatch → произвольный тег из input.
+# После push git-тега v* создаётся черновик GitHub Release с перечислением образов и дайджестов.
 # Опционально зеркалирует те же манифесты в Docker Hub (без повторной сборки).
 #
-# Триггеры: push тега v* или workflow_dispatch.
+# Триггеры: push в любую ветку, push тега v*, workflow_dispatch.
 #
 # Настройка Docker Hub (репозиторий → Settings → Secrets and variables → Actions):
 #   Variables: DOCKERHUB_IMAGE_PREFIX = myuser/openvpn-control   (образы: ...-backend / ...-frontend)
@@ -15,6 +18,8 @@ name: Docker publish
 
 on:
   push:
+    branches:
+      - "**"
     tags:
       - "v*"
   workflow_dispatch:
@@ -64,8 +69,14 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
-          else
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
             echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          else
+            short_sha="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+            echo "value=${short_sha}" >> "$GITHUB_OUTPUT"
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: docker/setup-buildx-action@v3
@@ -92,7 +103,7 @@ jobs:
           images: ${{ env.IMAGE_BACKEND }}
           tags: |
             type=raw,value=${{ steps.tag.outputs.value }}
-            type=raw,value=latest,enable=${{ startsWith(steps.tag.outputs.value, 'v') }}
+            type=raw,value=latest,enable=${{ steps.tag.outputs.is_release == 'true' && startsWith(steps.tag.outputs.value, 'v') }}
           flavor: |
             latest=false
 
@@ -114,7 +125,7 @@ jobs:
           images: ${{ env.IMAGE_FRONTEND }}
           tags: |
             type=raw,value=${{ steps.tag.outputs.value }}
-            type=raw,value=latest,enable=${{ startsWith(steps.tag.outputs.value, 'v') }}
+            type=raw,value=latest,enable=${{ steps.tag.outputs.is_release == 'true' && startsWith(steps.tag.outputs.value, 'v') }}
           flavor: |
             latest=false
 
@@ -141,13 +152,13 @@ jobs:
           set -eux
           docker buildx imagetools create --tag "${DST_BACKEND}:${TAG}" "${SRC_BACKEND}:${TAG}"
           docker buildx imagetools create --tag "${DST_FRONTEND}:${TAG}" "${SRC_FRONTEND}:${TAG}"
-          if [[ "${TAG}" == v* ]]; then
+          if [[ "${{ steps.tag.outputs.is_release }}" == "true" && "${TAG}" == v* ]]; then
             docker buildx imagetools create --tag "${DST_BACKEND}:latest" "${SRC_BACKEND}:${TAG}"
             docker buildx imagetools create --tag "${DST_FRONTEND}:latest" "${SRC_FRONTEND}:${TAG}"
           fi
 
       - name: Draft release (образы в GHCR)
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && steps.tag.outputs.is_release == 'true'
         env:
           TAG: ${{ steps.tag.outputs.value }}
           IMAGE_BACKEND: ${{ env.IMAGE_BACKEND }}
@@ -186,7 +197,7 @@ jobs:
           } > container-images.env
 
       - name: Publish draft release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && steps.tag.outputs.is_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.value }}
