@@ -40,7 +40,7 @@ func numericSettingValue(v any) (float64, bool) {
 	case int64:
 		return float64(x), true
 	default:
-		s := settingStr(v)
+		s := strings.TrimSpace(fmt.Sprint(v))
 		if s == "" {
 			return 0, false
 		}
