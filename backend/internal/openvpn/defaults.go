@@ -69,9 +69,9 @@ func InitialServerSettings() map[string]any {
 		"hand-window":            60,
 		"tun-mtu":                1500,
 		"mssfix":                 1450,
-		"fragment":               0,
-		"user":                   "nobody",
-		"group":                  "nogroup",
+		"fragment":               "",
+		"user":                   "",
+		"group":                  "",
 		"ifconfig-pool-persist":  "",
 		"comp-lzo":               "",
 		"allow-compression":      "",
@@ -113,14 +113,17 @@ func EnsureServerCryptoDefaults(settings map[string]any) {
 	if settingStr(settings, "data-ciphers") == "" {
 		settings["data-ciphers"] = "AES-256-GCM:AES-128-GCM"
 	}
-	if settingStr(settings, "auth") == "" {
-		settings["auth"] = "SHA256"
-	}
 	if settingStr(settings, "tls-version-min") == "" {
 		settings["tls-version-min"] = "1.2"
 	}
 	if _, ok := settings["cipher"]; ok && settingStr(settings, "cipher") == "" {
 		delete(settings, "cipher")
+	}
+	dc := settingStr(settings, "data-ciphers")
+	if !dataCiphersUseAuth(dc) {
+		delete(settings, "auth")
+	} else if settingStr(settings, "auth") == "" {
+		settings["auth"] = "SHA256"
 	}
 }
 

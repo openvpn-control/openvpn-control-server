@@ -388,16 +388,18 @@ export const OPENVPN_SERVER_SETTINGS_FIELDS: SettingsFieldMeta[] = [
   {
     key: "user",
     label: "User",
-    description: "Пользователь ОС после инициализации (снижение привилегий).",
+    description:
+      "Пользователь ОС после старта (снижение привилегий). RHEL/Alma/Rocky: nobody. Оставьте пустым, если служба уже запускается от нужного пользователя.",
     type: "text",
     placeholder: "nobody",
   },
   {
     key: "group",
     label: "Group",
-    description: "Группа ОС после инициализации.",
+    description:
+      "Группа ОС после старта. RHEL/Alma/Rocky: nobody (не nogroup). Debian/Ubuntu: nogroup.",
     type: "text",
-    placeholder: "nogroup",
+    placeholder: "nobody",
   },
   {
     key: "ifconfig-pool-persist",

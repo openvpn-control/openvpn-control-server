@@ -130,7 +130,9 @@ func GetOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeID 
 		if prev == nil {
 			prev = map[string]any{}
 		}
-		merged := mergeSettings(prev, agentSettings)
+		// Настройки из БД панели важнее снимка server.conf (иначе group nogroup с узла затирает правки).
+		merged := mergeSettings(agentSettings, prev)
+		ensureOpenvpnSettingsReady(merged)
 		if err := upsertSettings(ctx, pool, an.ID, merged, cp); err != nil {
 			return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
 		}
@@ -294,11 +296,12 @@ func ApplyOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeI
 		incoming = map[string]any{}
 	}
 	settings := mergeSettings(prev, incoming)
+	ensureOpenvpnSettingsReady(settings)
 	if err := paneltasks.EnqueueOpenvpnMaterialSyncTasks(ctx, pool, an.ID, settings); err != nil {
 		return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
 	}
 	_ = paneltasks.ProcessPendingTasksForNode(ctx, pool, an.ID, 50)
-	if _, err := agent.PostOpenVPNSettings(ctx, an, openvpn.StripPanelOnlySettings(settings)); err != nil {
+	if _, err := agent.PostOpenVPNSettingsStage(ctx, an, openvpn.StripPanelOnlySettings(settings)); err != nil {
 		return mapAgentError(err)
 	}
 	applyData, err := agent.PostOpenVPNApplyConfig(ctx, an)
@@ -561,17 +564,7 @@ func PostOpenvpnCheckConfigForPanel(ctx context.Context, pool *pgxpool.Pool, nod
 	if err != nil {
 		return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
 	}
-	saved, _, err := loadSettingsRow(ctx, pool, an.ID)
-	if err == nil && saved != nil {
-		ensureOpenvpnSettingsReady(saved)
-		if err := upsertSettings(ctx, pool, an.ID, saved, nil); err != nil {
-			return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
-		}
-		_ = paneltasks.EnqueueOpenvpnMaterialSyncTasks(ctx, pool, an.ID, saved)
-		if _, err := agent.PostOpenVPNSettings(ctx, an, openvpn.StripPanelOnlySettings(saved)); err != nil {
-			return mapAgentError(err)
-		}
-	}
+	// Проверяем активный server.conf на узле (не перезаписываем черновиком из БД перед check).
 	data, err := agent.PostOpenVPNCheckConfig(ctx, an)
 	if err != nil {
 		status := http.StatusBadGateway

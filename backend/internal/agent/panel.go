@@ -38,7 +38,12 @@ func PostDnsmasq(ctx context.Context, n Node, action, config string) (map[string
 }
 
 func PostOpenVPNSettings(ctx context.Context, n Node, settings map[string]any) (map[string]any, error) {
-	return OpenVPNSettings(ctx, n, settings)
+	return OpenVPNSettings(ctx, n, settings, true)
+}
+
+// PostOpenVPNSettingsStage writes staged server.conf without running openvpn --config (for apply).
+func PostOpenVPNSettingsStage(ctx context.Context, n Node, settings map[string]any) (map[string]any, error) {
+	return OpenVPNSettings(ctx, n, settings, false)
 }
 
 func PostOpenVPNApplyConfig(ctx context.Context, n Node) (map[string]any, error) {

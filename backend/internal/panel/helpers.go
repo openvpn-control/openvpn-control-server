@@ -113,7 +113,7 @@ func mergeSettings(prev, incoming map[string]any) map[string]any {
 }
 
 func ensureOpenvpnSettingsReady(settings map[string]any) {
-	openvpn.EnsureServerCryptoDefaults(settings)
+	openvpn.NormalizeServerSettings(settings)
 	openvpn.EnsureMaterialPaths(settings)
 }
 
