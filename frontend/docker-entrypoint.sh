@@ -1,9 +1,10 @@
 #!/bin/sh
 set -e
 
-CONFIG="/usr/share/nginx/html/env-config.js"
+INDEX="/usr/share/nginx/html/index.html"
 API_URL="${API_URL:-http://localhost:8080}"
-escaped=$(printf '%s' "$API_URL" | sed 's/\\/\\\\/g; s/"/\\"/g')
+# HTML attribute value: escape & and " for index.html
+escaped=$(printf '%s' "$API_URL" | sed 's/&/\&amp;/g; s/"/\&quot;/g')
 
-printf 'window.__APP_CONFIG__ = { API_URL: "%s" };\n' "$escaped" > "$CONFIG"
+sed -i "s|data-api-url=\"\"|data-api-url=\"${escaped}\"|" "$INDEX"
 exec nginx -g 'daemon off;'

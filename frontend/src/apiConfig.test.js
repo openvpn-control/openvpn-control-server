@@ -4,11 +4,17 @@ import { resolveApiUrl } from "./apiConfig.js";
 describe("apiConfig", () => {
   afterEach(() => {
     delete window.__APP_CONFIG__;
+    delete document.documentElement.dataset.apiUrl;
     vi.unstubAllEnvs();
   });
 
   it("uses runtime API_URL from env-config.js", () => {
     window.__APP_CONFIG__ = { API_URL: "https://panel.example.com/" };
+    expect(resolveApiUrl()).toBe("https://panel.example.com");
+  });
+
+  it("uses data-api-url from index.html in production", () => {
+    document.documentElement.dataset.apiUrl = "https://panel.example.com/";
     expect(resolveApiUrl()).toBe("https://panel.example.com");
   });
 
