@@ -82,7 +82,7 @@ function mockApiFetch() {
     if (url.includes("/api/vpn-users")) return jsonResponse(users);
     if (url.includes("/api/panel/nodes/s1/openvpn-settings-save")) return jsonResponse({ message: "Настройки сохранены на панели." });
     if (url.includes("/api/panel/nodes/s1/openvpn-settings-apply")) {
-      return jsonResponse({ message: "Конфигурация успешно применена.", output: "ok", serviceLog: "ok", activeVersionId: "v2" });
+      return jsonResponse({ ok: true, message: "Конфигурация записана.", output: "ok" });
     }
     if (url.includes("/api/panel/nodes/s1/openvpn-settings")) return jsonResponse(openvpnSettingsPayload);
     if (url.includes("/api/panel/nodes/s1/system/network")) {

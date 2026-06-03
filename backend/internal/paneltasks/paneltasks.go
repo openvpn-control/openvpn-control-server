@@ -47,6 +47,18 @@ func EnqueueOpenvpnServiceRestart(ctx context.Context, pool *pgxpool.Pool, agent
 	})
 }
 
+// CancelPendingOpenvpnServiceRestarts removes queued restarts (apply already restarted OpenVPN).
+func CancelPendingOpenvpnServiceRestarts(ctx context.Context, pool *pgxpool.Pool, agentNodeID string) error {
+	if strings.TrimSpace(agentNodeID) == "" {
+		return nil
+	}
+	_, err := pool.Exec(ctx, `
+		DELETE FROM "PanelAsyncTask"
+		WHERE "agentNodeId" = $1 AND type = $2 AND status = 'pending'`,
+		agentNodeID, TypeOpenvpnServiceRestart)
+	return err
+}
+
 func EnqueueDnsmasqApply(ctx context.Context, pool *pgxpool.Pool, agentNodeID, config string) error {
 	id := strings.TrimSpace(agentNodeID)
 	if id == "" {

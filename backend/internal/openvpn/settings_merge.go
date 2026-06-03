@@ -1,9 +1,12 @@
 package openvpn
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // MergeSettingsForDisplay combines panel DB and agent snapshot (server.conf).
-// По умолчанию побеждает агент (факт на сервере); panel* и user/group — из БД панели.
+// База — снимок с агента (файл); непустые значения из БД перекрывают (в т.ч. только что применённые).
 func MergeSettingsForDisplay(db, agent map[string]any) map[string]any {
 	if db == nil {
 		db = map[string]any{}
@@ -11,19 +14,41 @@ func MergeSettingsForDisplay(db, agent map[string]any) map[string]any {
 	if agent == nil {
 		agent = map[string]any{}
 	}
-	out := mergeMaps(db, agent)
+	out := mergeMaps(agent, map[string]any{})
 	for k, v := range db {
 		if strings.HasPrefix(k, "panel") {
 			out[k] = v
+			continue
+		}
+		if k == "user" || k == "group" {
+			if _, ok := db[k]; ok {
+				out[k] = v
+			}
+			continue
+		}
+		if !settingValueIsEmpty(v) {
+			out[k] = v
 		}
 	}
-	if _, ok := db["user"]; ok {
-		out["user"] = db["user"]
-	}
-	if _, ok := db["group"]; ok {
-		out["group"] = db["group"]
-	}
 	return out
+}
+
+func settingValueIsEmpty(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch x := v.(type) {
+	case bool:
+		return false
+	case []any:
+		return len(x) == 0
+	case []string:
+		return len(x) == 0
+	case float64, float32, int, int64:
+		return false
+	default:
+		return strings.TrimSpace(fmt.Sprint(v)) == ""
+	}
 }
 
 func mergeMaps(base, overlay map[string]any) map[string]any {

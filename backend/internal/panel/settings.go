@@ -287,42 +287,19 @@ func ApplyOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeI
 	if err != nil {
 		return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
 	}
-	prev, _, _ := loadSettingsRow(ctx, pool, an.ID)
-	if prev == nil {
-		prev = map[string]any{}
+	rawConfig := strField(reqBody, "rawConfig")
+	if strings.TrimSpace(rawConfig) == "" {
+		return Result{Status: http.StatusBadRequest, Body: map[string]string{"error": "Требуется rawConfig"}}
 	}
-	incoming, _ := reqBody["settings"].(map[string]any)
-	if incoming == nil {
-		incoming = map[string]any{}
-	}
-	settings := mergeSettings(prev, incoming)
-	ensureOpenvpnSettingsReady(settings)
-	if err := paneltasks.EnqueueOpenvpnMaterialSyncTasks(ctx, pool, an.ID, settings); err != nil {
-		return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
-	}
-	_ = paneltasks.ProcessPendingTasksForNode(ctx, pool, an.ID, 50)
-	payload := openvpn.StripPanelOnlySettings(settings)
-	applyData, err := agent.PostOpenVPNApplyConfig(ctx, an, payload)
+	applyData, err := agent.PostOpenVPNApplyConfig(ctx, an, rawConfig)
 	if err != nil {
 		return mapAgentError(err)
 	}
-	if agentData, err := agent.GetOpenVPNSettings(ctx, an); err == nil {
-		if onDisk, ok := agentData["settings"].(map[string]any); ok {
-			settings = mergeSettings(onDisk, settings)
-		}
-	}
-	if err := upsertSettings(ctx, pool, an.ID, settings, nil); err != nil {
-		return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
-	}
-	go func() {
-		if err := paneltasks.EnqueueSnapshotForNode(context.Background(), pool, an.ID); err != nil {
-			log.Printf("EnqueueSnapshotForNode: %v", err)
-		}
-	}()
 	return Result{Status: http.StatusOK, Body: map[string]any{
-		"ok": true, "message": "Настройки применены на агенте.",
-		"output": agentBodyString(applyData, "output"),
-		"serviceLog": agentBodyString(applyData, "serviceLog"),
+		"ok":         true,
+		"message":    "Конфигурация записана на агенте, OpenVPN перезапущен.",
+		"output":     agentBodyString(applyData, "output"),
+		"configPath": agentBodyString(applyData, "configPath"),
 	}}
 }
 

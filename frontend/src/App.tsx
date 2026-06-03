@@ -156,6 +156,15 @@ function lineDiffLcs(oldStr, newStr) {
   return out.reverse();
 }
 
+/** Текст нового server.conf из блока diff (строки «+» и без изменений, без «-»). */
+function rawConfigFromServerSettingsDiff(diff) {
+  if (!Array.isArray(diff) || diff.length === 0) return "";
+  return diff
+    .filter((d) => d && d.type !== "del")
+    .map((d) => String(d.line ?? ""))
+    .join("\n");
+}
+
 function fallbackRawFromSettings(settings) {
   const stripped = buildOpenVpnPayloadForAgent(settings || {});
   const payload = { ...stripped };
@@ -3351,9 +3360,14 @@ export default function App() {
 
   const applyServerOpenVpnSettings = useCallback(async () => {
     if (!selectedServerId || !tokenRef.current) return;
+    const rawConfig = rawConfigFromServerSettingsDiff(serverOpenVpnConfigDiff);
+    if (!String(rawConfig).trim()) {
+      setServerOpenVpnError("Нет текста конфигурации для применения.");
+      return;
+    }
     setServerOpenVpnApplying(true);
     setServerOpenVpnApplyLogVisible(true);
-    setServerOpenVpnApplyLog("Перезапуск OpenVPN...\n");
+    setServerOpenVpnApplyLog("Запись server.conf и перезапуск OpenVPN...\n");
     setServerOpenVpnApplyResult({ status: "idle", message: "" });
     setServerOpenVpnError("");
     setServerOpenVpnHints([]);
@@ -3363,68 +3377,32 @@ export default function App() {
         `/api/panel/nodes/${encodeURIComponent(selectedServerId)}/openvpn-settings-apply`,
         "POST",
         tokenRef.current,
-        { settings: buildOpenVpnSettingsForPanelSave(serverOpenVpnSettings) },
+        { rawConfig },
       );
       const output = typeof data?.output === "string" ? data.output.trim() : "";
-      const serviceLog = typeof data?.serviceLog === "string" ? data.serviceLog.trim() : "";
-      const logText = [output, serviceLog].filter(Boolean).join("\n\n");
-      setServerOpenVpnApplyLog(logText || "(нет вывода)");
+      setServerOpenVpnApplyLog(output || "(нет вывода)");
       setServerOpenVpnApplyResult({
         status: "success",
-        message: data?.message || "Конфигурация успешно применена, OpenVPN перезапущен.",
+        message: data?.message || "Конфигурация записана, OpenVPN перезапущен.",
       });
-      const refreshed = await request(
-        `/api/panel/nodes/${encodeURIComponent(selectedServerId)}/openvpn-settings`,
-        "GET",
-        tokenRef.current,
-      );
-      const activeSettings =
-        refreshed?.settings && typeof refreshed.settings === "object" && !Array.isArray(refreshed.settings)
-          ? { ...refreshed.settings }
-          : {};
-      for (const f of OPENVPN_SERVER_SETTINGS_FIELDS) {
-        if (f.type === "textarea") {
-          const v = activeSettings[f.key];
-          if (Array.isArray(v)) activeSettings[f.key] = v;
-          else if (typeof v === "string") activeSettings[f.key] = v ? [v] : [];
-          else activeSettings[f.key] = [];
-        }
-      }
-      setServerOpenVpnSettings(activeSettings);
-      loadData();
-      try {
-        const raw = await request(
-          `/api/panel/nodes/${encodeURIComponent(selectedServerId)}/openvpn-raw-config`,
-          "GET",
-          tokenRef.current,
-        );
-        setServerAgentRawConfig(typeof raw?.rawConfig === "string" ? raw.rawConfig : "");
-      } catch {
-        /* ignore */
-      }
+      setServerAgentRawConfig(rawConfig);
     } catch (err) {
       const output = typeof err.output === "string" ? err.output.trim() : "";
-      const serviceLog = typeof err.serviceLog === "string" ? err.serviceLog.trim() : "";
-      const backupPath = typeof err.backupPath === "string" ? err.backupPath.trim() : "";
-      const details = [output, serviceLog].filter(Boolean).join("\n\n");
-      setServerOpenVpnApplyLog(details || String(err.message || "Применение не удалось"));
+      setServerOpenVpnApplyLog(output || String(err.message || "Применение не удалось"));
       setServerOpenVpnApplyResult({
         status: "error",
         message: err.message || "Применение конфигурации завершилось с ошибкой.",
       });
       setServerOpenVpnError(
-        `${err.message || "Применение не удалось"}${details ? `\n\n${details}` : ""}`,
+        `${err.message || "Применение не удалось"}${output ? `\n\n${output}` : ""}`,
       );
       const hints = Array.isArray(err.hints) ? [...err.hints] : [];
-      if (backupPath) {
-        hints.push(`Резервная копия конфига сохранена: ${backupPath}`);
-      }
       setServerOpenVpnHints(hints);
       throw err;
     } finally {
       setServerOpenVpnApplying(false);
     }
-  }, [selectedServerId]);
+  }, [selectedServerId, serverOpenVpnConfigDiff]);
 
   const saveServerOpenVpnClientSettings = useCallback(async () => {
     if (!selectedServerId || !tokenRef.current) return;

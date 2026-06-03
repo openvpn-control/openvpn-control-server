@@ -2,23 +2,20 @@ package openvpn
 
 import "testing"
 
-func TestMergeSettingsForDisplayAgentWins(t *testing.T) {
-	db := map[string]any{"management": "", "port": float64(1194)}
-	agent := map[string]any{"management": "127.0.0.1 7505", "port": float64(1194)}
+func TestMergeSettingsForDisplayKeepsNonEmptyDBOverAgent(t *testing.T) {
+	agent := map[string]any{"tls-crypt": "", "port": float64(1194)}
+	db := map[string]any{"tls-crypt": "1", "port": float64(1194)}
 	got := MergeSettingsForDisplay(db, agent)
-	if got["management"] != "127.0.0.1 7505" {
-		t.Fatalf("management=%v", got["management"])
+	if got["tls-crypt"] != "1" {
+		t.Fatalf("tls-crypt=%v want 1", got["tls-crypt"])
 	}
 }
 
-func TestMergeSettingsForDisplayPanelGroup(t *testing.T) {
-	db := map[string]any{"group": "nobody", "panelRootCaId": "ca1"}
-	agent := map[string]any{"group": "nogroup"}
+func TestMergeSettingsForDisplayEmptyDBDoesNotWipeAgent(t *testing.T) {
+	agent := map[string]any{"tls-crypt": "/etc/openvpn/tc.key"}
+	db := map[string]any{"tls-crypt": ""}
 	got := MergeSettingsForDisplay(db, agent)
-	if got["group"] != "nobody" {
-		t.Fatalf("group=%v", got["group"])
-	}
-	if got["panelRootCaId"] != "ca1" {
-		t.Fatalf("panelRootCaId=%v", got["panelRootCaId"])
+	if got["tls-crypt"] != "/etc/openvpn/tc.key" {
+		t.Fatalf("tls-crypt=%v", got["tls-crypt"])
 	}
 }

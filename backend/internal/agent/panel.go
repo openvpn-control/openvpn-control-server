@@ -46,8 +46,8 @@ func PostOpenVPNSettingsStage(ctx context.Context, n Node, settings map[string]a
 	return OpenVPNSettings(ctx, n, settings, false)
 }
 
-func PostOpenVPNApplyConfig(ctx context.Context, n Node, settings map[string]any) (map[string]any, error) {
-	return OpenVPNApply(ctx, n, settings)
+func PostOpenVPNApplyConfig(ctx context.Context, n Node, rawConfig string) (map[string]any, error) {
+	return OpenVPNApplyRaw(ctx, n, rawConfig)
 }
 
 func PostOpenVPNServiceAction(ctx context.Context, n Node, action string) (map[string]any, error) {
