@@ -112,7 +112,12 @@ func (h *PanelNodes) postOpenvpnService(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *PanelNodes) postOpenvpnCheckConfig(w http.ResponseWriter, r *http.Request) {
-	h.writeResult(w, panel.PostOpenvpnCheckConfigForPanel(r.Context(), h.Pool, chi.URLParam(r, "id")))
+	var body map[string]any
+	if err := httpx.DecodeJSONLoose(r, &body); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	h.writeResult(w, panel.PostOpenvpnCheckConfigForPanel(r.Context(), h.Pool, chi.URLParam(r, "id"), body))
 }
 
 func (h *PanelNodes) postAgentUpdate(w http.ResponseWriter, r *http.Request) {

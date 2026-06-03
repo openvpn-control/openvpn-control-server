@@ -149,8 +149,12 @@ func OpenVPNApply(ctx context.Context, n Node, settings map[string]any) (map[str
 	return RequestJSON(ctx, n, "/openvpn/apply-config", http.MethodPost, body, RequestOpts{Timeout: 120 * time.Second})
 }
 
-func OpenVPNCheck(ctx context.Context, n Node) (map[string]any, error) {
-	return RequestJSON(ctx, n, "/openvpn/check-config", http.MethodPost, map[string]any{}, RequestOpts{Timeout: 30 * time.Second})
+func OpenVPNCheck(ctx context.Context, n Node, settings map[string]any) (map[string]any, error) {
+	body := map[string]any{}
+	if settings != nil && len(settings) > 0 {
+		body["settings"] = settings
+	}
+	return RequestJSON(ctx, n, "/openvpn/check-config", http.MethodPost, body, RequestOpts{Timeout: 30 * time.Second})
 }
 
 func OpenVPNRawConfig(ctx context.Context, n Node) (map[string]any, error) {

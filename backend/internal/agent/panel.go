@@ -54,8 +54,8 @@ func PostOpenVPNServiceAction(ctx context.Context, n Node, action string) (map[s
 	return OpenVPNService(ctx, n, action)
 }
 
-func PostOpenVPNCheckConfig(ctx context.Context, n Node) (map[string]any, error) {
-	return OpenVPNCheck(ctx, n)
+func PostOpenVPNCheckConfig(ctx context.Context, n Node, settings map[string]any) (map[string]any, error) {
+	return OpenVPNCheck(ctx, n, settings)
 }
 
 func PostBinaryUpdate(ctx context.Context, n Node, fileName, binaryBase64, checksumSha256 string) (map[string]any, error) {

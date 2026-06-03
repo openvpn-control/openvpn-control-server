@@ -4105,15 +4105,17 @@ export default function App() {
         `/api/panel/nodes/${encodeURIComponent(selectedServerId)}/openvpn-check-config`,
         "POST",
         tokenRef.current,
-        {},
+        { settings: buildOpenVpnSettingsForPanelSave(serverOpenVpnSettings) },
       );
       const command = String(data?.command || "").trim();
       const configPath = String(data?.configPath || "").trim();
+      const checkedSource = String(data?.checkedSource || "").trim();
       const output = String(data?.output || "").trim();
       const details = [
         command ? `$ ${command}` : "",
         output || "(пустой вывод)",
         configPath ? `config: ${configPath}` : "",
+        checkedSource ? `источник: ${checkedSource}` : "",
       ]
         .filter(Boolean)
         .join("\n\n");
@@ -4147,7 +4149,7 @@ export default function App() {
     } finally {
       setServiceCheckBusy(false);
     }
-  }, [selectedServerId]);
+  }, [selectedServerId, serverOpenVpnSettings]);
 
   useEffect(() => {
     loadData();

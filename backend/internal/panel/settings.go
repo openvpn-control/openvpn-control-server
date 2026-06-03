@@ -559,7 +559,7 @@ func PostOpenvpnServiceActionForPanel(ctx context.Context, pool *pgxpool.Pool, n
 	return Result{Status: http.StatusOK, Body: data}
 }
 
-func PostOpenvpnCheckConfigForPanel(ctx context.Context, pool *pgxpool.Pool, nodeID string) Result {
+func PostOpenvpnCheckConfigForPanel(ctx context.Context, pool *pgxpool.Pool, nodeID string, reqBody map[string]any) Result {
 	an, err := loadAgentNode(ctx, pool, nodeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Result{Status: http.StatusNotFound, Body: map[string]string{"error": "Узел не найден"}}
@@ -567,8 +567,18 @@ func PostOpenvpnCheckConfigForPanel(ctx context.Context, pool *pgxpool.Pool, nod
 	if err != nil {
 		return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
 	}
-	// Проверяем активный server.conf на узле (не перезаписываем черновиком из БД перед check).
-	data, err := agent.PostOpenVPNCheckConfig(ctx, an)
+	prev, _, _ := loadSettingsRow(ctx, pool, an.ID)
+	if prev == nil {
+		prev = map[string]any{}
+	}
+	incoming, _ := reqBody["settings"].(map[string]any)
+	if incoming == nil {
+		incoming = map[string]any{}
+	}
+	settings := mergeSettings(prev, incoming)
+	ensureOpenvpnSettingsReady(settings)
+	payload := openvpn.StripPanelOnlySettings(settings)
+	data, err := agent.PostOpenVPNCheckConfig(ctx, an, payload)
 	if err != nil {
 		status := http.StatusBadGateway
 		var ae *agent.Error
