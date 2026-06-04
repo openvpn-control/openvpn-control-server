@@ -264,13 +264,19 @@ func (h *VpnUsers) VPNSessions(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "Пользователь не найден")
 		return
 	}
-	cutoff := time.Now().Add(-h.Cfg.ClientSessionFreshness)
-	rows, err := h.Pool.Query(r.Context(), `
+	ctx := r.Context()
+	now := time.Now().UTC()
+	supplementUserVpnSessions(ctx, h.Pool, id, now)
+
+	cutoff := now.Add(-h.Cfg.ClientSessionFreshness)
+	rows, err := h.Pool.Query(ctx, `
 		SELECT c."agentNodeId", c."sessionId", c."commonName", c."realIp", c."virtualIp",
 			c."connectedAt", c."firstSeenAt", c."lastSeenAt", c."endedAt", COALESCE(n.name, c."agentNodeId")
 		FROM "ClientIpAssignment" c
 		LEFT JOIN "AgentNode" n ON n.id = c."agentNodeId"
-		WHERE c."commonName" IN (SELECT "commonName" FROM "Certificate" WHERE "vpnUserId" = $1)
+		WHERE LOWER(TRIM(c."commonName")) IN (
+			SELECT LOWER(TRIM("commonName")) FROM "Certificate" WHERE "vpnUserId" = $1 AND TRIM("commonName") <> ''
+		)
 		ORDER BY c."lastSeenAt" DESC`, id)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())

@@ -2936,6 +2936,34 @@ export default function App() {
     setUserCcdResult("");
   }, [selectedUserId, vpnUsers]);
 
+  const userSessionsWireHint = useMemo(() => {
+    if (!selectedUserId) return null;
+    const linkedLower = new Set(
+      certificates
+        .filter((c) => c.vpnUserId === selectedUserId && String(c.commonName || "").trim())
+        .map((c) => String(c.commonName).trim().toLowerCase()),
+    );
+    for (const cl of clients) {
+      const cn = String(cl.commonName || "").trim();
+      if (!cn || linkedLower.has(cn.toLowerCase())) continue;
+      const cert = certificates.find(
+        (c) => String(c.commonName || "").trim().toLowerCase() === cn.toLowerCase(),
+      );
+      if (!cert) {
+        return `На сервере активна сессия CN «${cn}», но в панели нет сертификата с таким CN.`;
+      }
+      if (!cert.vpnUserId) {
+        return `На сервере активна сессия CN «${cn}», но сертификат не привязан к пользователю — привяжите его на вкладке «Сертификаты».`;
+      }
+      if (cert.vpnUserId !== selectedUserId) {
+        const other = vpnUsers.find((u) => u.id === cert.vpnUserId);
+        const who = other?.fullName || "другому пользователю";
+        return `CN «${cn}» привязан к ${who}, а не к этому профилю.`;
+      }
+    }
+    return null;
+  }, [selectedUserId, certificates, clients, vpnUsers]);
+
   const selectedUserCertificates = useMemo(() => {
     if (!selectedUserId) return [];
     return certificates
@@ -4088,11 +4116,48 @@ export default function App() {
     if (!uid || !auth) return;
     try {
       const rows = await request(`/api/vpn-users/${encodeURIComponent(uid)}/vpn-sessions`, "GET", auth);
-      setUserProfileSessions(Array.isArray(rows) ? rows : []);
+      const list = Array.isArray(rows) ? rows : [];
+      const certCns = new Set(
+        certificates
+          .filter((c) => c.vpnUserId === uid && String(c.commonName || "").trim())
+          .map((c) => String(c.commonName).trim().toLowerCase()),
+      );
+      if (certCns.size === 0) {
+        setUserProfileSessions(list);
+        return;
+      }
+      const seen = new Set(list.map((r) => `${r.nodeId}\t${r.sessionId}`));
+      const merged = [...list];
+      for (const cl of clients) {
+        const cn = String(cl.commonName || "").trim();
+        if (!cn || !certCns.has(cn.toLowerCase())) continue;
+        const key = `${cl.nodeId}\t${cl.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push({
+          nodeId: cl.nodeId,
+          nodeName: cl.nodeName || cl.nodeId,
+          sessionId: cl.id,
+          commonName: cn,
+          remoteIp: cl.remoteIp,
+          virtualIp: cl.virtualIp,
+          connectedAt: cl.connectedAt || cl.connectedSince,
+          firstSeenAt: cl.connectedAt || cl.connectedSince,
+          lastSeenAt: new Date().toISOString(),
+          endedAt: null,
+          isActive: true,
+          inBps: Number(cl.inBps || 0),
+          outBps: Number(cl.outBps || 0),
+        });
+      }
+      merged.sort(
+        (a, b) => new Date(b.lastSeenAt || 0).getTime() - new Date(a.lastSeenAt || 0).getTime(),
+      );
+      setUserProfileSessions(merged);
     } catch {
       setUserProfileSessions([]);
     }
-  }, [selectedUserId]);
+  }, [selectedUserId, certificates, clients]);
 
   const openUserSessionDisconnect = useCallback((nodeId, nodeName, sessionId, profileFullName) => {
     userSessionDisconnectTargetRef.current = { nodeId, sessionId };
@@ -10464,6 +10529,11 @@ export default function App() {
                     {userProfileTab === "sessions" && (
                       <>
                         <h2 className="server-detail-section-title">Сессии</h2>
+                        {userSessionsWireHint ? (
+                          <p className="muted" style={{ marginBottom: 12, maxWidth: 720 }}>
+                            {userSessionsWireHint}
+                          </p>
+                        ) : null}
                         <div className="app-table-with-pagination">
                           <div className="app-table-scroll">
                             <table className="app-table app-table--compact app-table--fixed-cols table-user-sessions">
@@ -10483,7 +10553,9 @@ export default function App() {
                                 {userProfileSessions.length === 0 ? (
                                   <tr>
                                     <td colSpan={8} className="muted">
-                                      Нет записей о сессиях для сертификатов этого пользователя.
+                                      {selectedUserCertificates.length === 0
+                                        ? "Нет привязанных сертификатов — выпустите или привяжите сертификат на вкладке «Сертификаты»."
+                                        : "Нет сессий в истории. Если на сервере видна активная сессия с CN этого пользователя, подождите синхронизацию или проверьте, что CN сертификата совпадает с CN в OpenVPN."}
                                     </td>
                                   </tr>
                                 ) : (

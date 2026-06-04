@@ -109,7 +109,7 @@ function userProfileKeys(tab: string): PanelDataKey[] {
     return ["vpnUsers", "organizations"];
   }
   if (tab === "sessions") {
-    return ["vpnUsers"];
+    return ["vpnUsers", "clients", "certificates"];
   }
   return ["vpnUsers", "organizations"];
 }
