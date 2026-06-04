@@ -2954,7 +2954,11 @@ export default function App() {
       const cn = String(cl.commonName || "").trim().toLowerCase();
       return cn && linkedLower.has(cn);
     });
-    if (hasOwnLive) return null;
+    const hasOwnHistory = userProfileSessions.some((row) => {
+      const cn = String(row.commonName || "").trim().toLowerCase();
+      return cn && linkedLower.has(cn);
+    });
+    if (hasOwnLive || hasOwnHistory) return null;
     const missing = linkedCerts.find((cert) => {
       const cnLower = String(cert.commonName).trim().toLowerCase();
       return !clients.some((cl) => String(cl.commonName || "").trim().toLowerCase() === cnLower);
@@ -2963,7 +2967,7 @@ export default function App() {
       return `Сертификат CN «${missing.commonName}» привязан к пользователю, но сейчас нет активной VPN-сессии с этим CN.`;
     }
     return null;
-  }, [selectedUserId, certificates, clients]);
+  }, [selectedUserId, certificates, clients, userProfileSessions]);
 
   const selectedUserCertificates = useMemo(() => {
     if (!selectedUserId) return [];

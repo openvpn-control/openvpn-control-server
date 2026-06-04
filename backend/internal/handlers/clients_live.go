@@ -63,6 +63,7 @@ func supplementLiveClients(ctx context.Context, pool *pgxpool.Pool, _ time.Time,
 			}
 			seen[key] = struct{}{}
 			agent.UpsertClientFromAgent(ctx, pool, c, now)
+			inBps, outBps := agent.LatestSessionTrafficBps(ctx, pool, nodeID, sid)
 			rip := ""
 			if s, ok := c["remoteIp"].(string); ok {
 				rip = remoteHost(s)
@@ -75,8 +76,8 @@ func supplementLiveClients(ctx context.Context, pool *pgxpool.Pool, _ time.Time,
 				"connectedAt":    c["connectedAt"],
 				"nodeId":         nodeID,
 				"nodeName":       c["nodeName"],
-				"inBps":          0.0,
-				"outBps":         0.0,
+				"inBps":          inBps,
+				"outBps":         outBps,
 				"trafficHistory": []map[string]any{},
 			})
 		}

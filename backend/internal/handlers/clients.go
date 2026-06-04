@@ -40,9 +40,8 @@ func (h *Clients) List(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type session struct {
-		ID, CN, RealIP, VIP string
-		ConnectedAt         time.Time
-		NodeID, NodeName    string
+		ID, CN, RealIP, VIP, ConnectedAt string
+		NodeID, NodeName                  string
 	}
 	var sessions []session
 	for rows.Next() {

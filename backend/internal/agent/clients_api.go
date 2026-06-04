@@ -58,8 +58,8 @@ func clientToMap(c vpnClientJSON, nodeID, nodeName string) map[string]any {
 		"remoteIp":    c.RemoteIP,
 		"virtualIp":   c.VirtualIP,
 		"connectedAt": c.ConnectedAt,
-		"rxBytes":     c.RxBytes,
-		"txBytes":     c.TxBytes,
+		"rxBytes":     int64(c.RxBytes),
+		"txBytes":     int64(c.TxBytes),
 		"nodeId":      nodeID,
 		"nodeName":    nodeName,
 	}

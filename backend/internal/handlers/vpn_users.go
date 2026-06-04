@@ -287,8 +287,8 @@ func (h *VpnUsers) VPNSessions(w http.ResponseWriter, r *http.Request) {
 	seen := map[string]bool{}
 	var out []map[string]any
 	for rows.Next() {
-		var nodeID, sessID, cn, realIP, vip string
-		var connectedAt, firstSeen, lastSeen time.Time
+		var nodeID, sessID, cn, realIP, vip, connectedAt string
+		var firstSeen, lastSeen time.Time
 		var endedAt *time.Time
 		var nodeName string
 		if rows.Scan(&nodeID, &sessID, &cn, &realIP, &vip, &connectedAt, &firstSeen, &lastSeen, &endedAt, &nodeName) != nil {

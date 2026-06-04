@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -200,10 +201,23 @@ func bigIntVal(v any) int64 {
 	switch t := v.(type) {
 	case float64:
 		return int64(t)
+	case float32:
+		return int64(t)
 	case int64:
 		return t
 	case int:
 		return int64(t)
+	case int32:
+		return int64(t)
+	case uint64:
+		return int64(t)
+	case uint32:
+		return int64(t)
+	case uint:
+		return int64(t)
+	case json.Number:
+		n, _ := t.Int64()
+		return n
 	default:
 		return 0
 	}
