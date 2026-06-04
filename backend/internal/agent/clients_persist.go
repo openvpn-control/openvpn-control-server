@@ -86,16 +86,108 @@ func CloseStaleAssignmentsForNode(ctx context.Context, pool *pgxpool.Pool, nodeI
 	if nodeID == "" {
 		return
 	}
+	var err error
 	if len(activeSessionIDs) == 0 {
-		return
+		_, err = pool.Exec(ctx, `
+			UPDATE "ClientIpAssignment"
+			SET "endedAt" = $2
+			WHERE "agentNodeId" = $1 AND "endedAt" IS NULL`,
+			nodeID, now)
+	} else {
+		_, err = pool.Exec(ctx, `
+			UPDATE "ClientIpAssignment"
+			SET "endedAt" = $2
+			WHERE "agentNodeId" = $1 AND "endedAt" IS NULL
+			AND NOT ("sessionId" = ANY($3))`,
+			nodeID, now, activeSessionIDs)
 	}
-	_, err := pool.Exec(ctx, `
-		UPDATE "ClientIpAssignment"
-		SET "endedAt" = $2
-		WHERE "agentNodeId" = $1 AND "endedAt" IS NULL
-		AND NOT ("sessionId" = ANY($3))`,
-		nodeID, now, activeSessionIDs)
 	if err != nil {
 		log.Printf("ClientIpAssignment close stale: %v", err)
+	}
+	closeOpenSourceIPForNodeSessions(ctx, pool, nodeID, activeSessionIDs, now)
+}
+
+// CloseClientSessionInDB closes panel history for a session (after management disconnect or agent drop).
+func CloseClientSessionInDB(ctx context.Context, pool *pgxpool.Pool, nodeID, sessionID string, now time.Time) {
+	if nodeID == "" || sessionID == "" {
+		return
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE "ClientIpAssignment"
+		SET "endedAt" = $3
+		WHERE "agentNodeId" = $1 AND "sessionId" = $2 AND "endedAt" IS NULL`,
+		nodeID, sessionID, now); err != nil {
+		log.Printf("ClientIpAssignment close session: %v", err)
+	}
+	closeOpenSourceIPForSession(ctx, pool, nodeID, sessionID, now)
+}
+
+func closeOpenSourceIPForSession(ctx context.Context, pool *pgxpool.Pool, nodeID, sessionID string, now time.Time) {
+	rows, err := pool.Query(ctx, `
+		SELECT id, "firstSeenAt"
+		FROM "ClientSourceIpHistory"
+		WHERE "agentNodeId" = $1 AND "sessionId" = $2 AND "endedAt" IS NULL`,
+		nodeID, sessionID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var firstSeen time.Time
+		if rows.Scan(&id, &firstSeen) != nil {
+			continue
+		}
+		duration := int(now.Sub(firstSeen).Seconds())
+		if duration < 0 {
+			duration = 0
+		}
+		_, _ = pool.Exec(ctx, `
+			UPDATE "ClientSourceIpHistory"
+			SET "endedAt" = $2, "durationSeconds" = $3
+			WHERE id = $1`, id, now, duration)
+	}
+}
+
+func closeOpenSourceIPForNodeSessions(ctx context.Context, pool *pgxpool.Pool, nodeID string, activeSessionIDs []string, now time.Time) {
+	if nodeID == "" {
+		return
+	}
+	var rows interface {
+		Close()
+		Next() bool
+		Scan(dest ...any) error
+	}
+	var err error
+	if len(activeSessionIDs) == 0 {
+		rows, err = pool.Query(ctx, `
+			SELECT id, "firstSeenAt"
+			FROM "ClientSourceIpHistory"
+			WHERE "agentNodeId" = $1 AND "endedAt" IS NULL`, nodeID)
+	} else {
+		rows, err = pool.Query(ctx, `
+			SELECT id, "firstSeenAt"
+			FROM "ClientSourceIpHistory"
+			WHERE "agentNodeId" = $1 AND "endedAt" IS NULL
+			AND NOT ("sessionId" = ANY($2))`, nodeID, activeSessionIDs)
+	}
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var firstSeen time.Time
+		if rows.Scan(&id, &firstSeen) != nil {
+			continue
+		}
+		duration := int(now.Sub(firstSeen).Seconds())
+		if duration < 0 {
+			duration = 0
+		}
+		_, _ = pool.Exec(ctx, `
+			UPDATE "ClientSourceIpHistory"
+			SET "endedAt" = $2, "durationSeconds" = $3
+			WHERE id = $1`, id, now, duration)
 	}
 }

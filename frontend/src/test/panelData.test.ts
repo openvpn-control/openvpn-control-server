@@ -1,21 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { panelDataKeysForRoute, panelDataRouteKey } from "../panelData";
+import {
+  panelDataFetchContext,
+  panelDataKeysForRoute,
+  panelDataPollIntervalMs,
+  panelDataRouteKey,
+} from "../panelData";
 import { parseAppRoute } from "../appRoutes";
 
 describe("panelDataKeysForRoute", () => {
-  it("polls overview on servers list only", () => {
+  it("polls nodes on servers list (not heavy overview)", () => {
     const keys = panelDataKeysForRoute(parseAppRoute("/servers", ""));
-    expect(keys).toEqual(["overview"]);
+    expect(keys).toEqual(["nodes"]);
   });
 
-  it("polls monitoring overview on server monitoring tab", () => {
+  it("polls scoped overview on server monitoring tab", () => {
     const keys = panelDataKeysForRoute(parseAppRoute("/servers/s1", "?tab=monitoring"));
     expect(keys).toEqual(["overview"]);
+    expect(panelDataFetchContext(parseAppRoute("/servers/s1", "?tab=monitoring"))).toEqual({
+      selectedServerId: "s1",
+    });
   });
 
-  it("polls session-related data on server sessions tab", () => {
+  it("polls nodes without overview on server sessions tab", () => {
     const keys = panelDataKeysForRoute(parseAppRoute("/servers/s1", "?tab=sessions"));
-    expect(keys).toEqual(expect.arrayContaining(["clients", "vpnUsers", "certificates", "overview", "nodes"]));
+    expect(keys).toEqual(expect.arrayContaining(["nodes", "clients", "vpnUsers", "certificates"]));
+    expect(keys).not.toContain("overview");
+  });
+
+  it("does not poll on user add form", () => {
+    const keys = panelDataKeysForRoute(parseAppRoute("/users/new", ""));
+    expect(keys).toEqual([]);
+  });
+
+  it("polls profile tab-specific keys", () => {
+    const keys = panelDataKeysForRoute(parseAppRoute("/users/u1", "?tab=certs"));
+    expect(keys).toEqual(["vpnUsers", "certificates"]);
   });
 
   it("polls admins only on settings admins", () => {
@@ -27,15 +46,16 @@ describe("panelDataKeysForRoute", () => {
     const keys = panelDataKeysForRoute(parseAppRoute("/documentation", ""));
     expect(keys).toEqual([]);
   });
+});
 
-  it("polls vpn ip history on logs vpn tab", () => {
-    const keys = panelDataKeysForRoute(parseAppRoute("/logs", "?tab=vpn-ip"));
-    expect(keys).toEqual(["ipHistory"]);
+describe("panelDataPollIntervalMs", () => {
+  it("uses slower interval for heavy user list", () => {
+    const ms = panelDataPollIntervalMs(parseAppRoute("/users", ""));
+    expect(ms).toBe(4000);
   });
 
-  it("polls admin actions on logs admin tab", () => {
-    const keys = panelDataKeysForRoute(parseAppRoute("/logs", "?tab=admin"));
-    expect(keys).toEqual(["adminActionLogs"]);
+  it("returns 0 when no keys", () => {
+    expect(panelDataPollIntervalMs(parseAppRoute("/tasks", ""))).toBe(0);
   });
 });
 

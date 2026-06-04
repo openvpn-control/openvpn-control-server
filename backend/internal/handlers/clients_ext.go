@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -68,6 +69,7 @@ func (h *Clients) Disconnect(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadGateway, "Failed to disconnect client: "+err.Error())
 		return
 	}
+	agent.CloseClientSessionInDB(r.Context(), h.Pool, nodeID, clientID, time.Now().UTC())
 	httpx.WriteJSON(w, http.StatusOK, result)
 }
 

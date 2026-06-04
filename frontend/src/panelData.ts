@@ -20,6 +20,11 @@ export type PanelRequestFn = (
   body?: unknown,
 ) => Promise<unknown>;
 
+export type PanelDataFetchContext = {
+  /** Для overview — только метрики и агент одного узла. */
+  selectedServerId?: string;
+};
+
 const PANEL_DATA_ENDPOINTS: Record<PanelDataKey, string> = {
   overview: "/api/monitoring/overview",
   admins: "/api/admins",
@@ -38,20 +43,26 @@ function uniqueKeys(keys: readonly PanelDataKey[]): PanelDataKey[] {
   return [...new Set(keys)];
 }
 
+function endpointForKey(key: PanelDataKey, ctx?: PanelDataFetchContext): string {
+  if (key === "overview" && ctx?.selectedServerId) {
+    return `${PANEL_DATA_ENDPOINTS.overview}?agentNodeId=${encodeURIComponent(ctx.selectedServerId)}`;
+  }
+  return PANEL_DATA_ENDPOINTS[key];
+}
+
 /** Все сущности панели (после полного restore БД). */
 export const ALL_PANEL_DATA_KEYS: PanelDataKey[] = uniqueKeys(
   Object.keys(PANEL_DATA_ENDPOINTS) as PanelDataKey[],
 );
 
 /** После мутаций — обновить связанные сущности (шире, чем poll по маршруту). */
-
 export const PANEL_DATA_REFRESH = {
-  servers: ["overview", "nodes"] satisfies PanelDataKey[],
+  servers: ["nodes", "overview"] satisfies PanelDataKey[],
   admins: ["admins"] satisfies PanelDataKey[],
   organizations: ["organizations"] satisfies PanelDataKey[],
   vpnUsers: ["vpnUsers", "certificates", "clients"] satisfies PanelDataKey[],
-  certificates: ["certificates", "rootCAs", "overview", "clients", "vpnUsers"] satisfies PanelDataKey[],
-  clients: ["clients", "overview"] satisfies PanelDataKey[],
+  certificates: ["certificates", "rootCAs", "nodes", "clients", "vpnUsers"] satisfies PanelDataKey[],
+  clients: ["clients", "nodes"] satisfies PanelDataKey[],
 } as const;
 
 export type PanelDataSetters = {
@@ -90,19 +101,30 @@ export function panelDataRouteKey(route: AppRouteState): string {
   ].join("|");
 }
 
-const SERVER_DETAIL_BASE: PanelDataKey[] = ["overview", "nodes"];
+function userProfileKeys(tab: string): PanelDataKey[] {
+  if (tab === "certs" || tab === "vpn") {
+    return ["vpnUsers", "certificates"];
+  }
+  if (tab === "ccd" || tab === "firewall") {
+    return ["vpnUsers", "organizations"];
+  }
+  if (tab === "sessions") {
+    return ["vpnUsers"];
+  }
+  return ["vpnUsers", "organizations"];
+}
 
 function serverDetailKeys(tab: string): PanelDataKey[] {
   if (tab === "monitoring") {
     return ["overview"];
   }
   if (tab === "sessions") {
-    return mergePanelDataKeys(SERVER_DETAIL_BASE, ["clients", "vpnUsers", "certificates"]);
+    return ["nodes", "clients", "vpnUsers", "certificates"];
   }
   if (tab === "certificates" || tab === "ca-center") {
-    return mergePanelDataKeys(SERVER_DETAIL_BASE, ["certificates", "rootCAs"]);
+    return ["nodes", "certificates", "rootCAs"];
   }
-  return SERVER_DETAIL_BASE;
+  return ["nodes"];
 }
 
 /** Какие сущности опрашивать на текущей странице. */
@@ -141,17 +163,17 @@ export function panelDataKeysForRoute(route: AppRouteState): PanelDataKey[] {
       return ["vpnUsers", "clients", "certificates"];
     }
     if (route.usersSub === "add") {
-      return ["rootCAs", "certificates", "organizations"];
+      return [];
     }
     if (route.usersSub === "profile") {
-      return ["vpnUsers", "certificates", "organizations"];
+      return userProfileKeys(route.userProfileTab);
     }
     return ["vpnUsers"];
   }
 
   if (primaryNav === "servers") {
     if (route.serversView === "list") {
-      return ["overview"];
+      return ["nodes"];
     }
     if (route.serversView === "add") {
       return [];
@@ -159,23 +181,57 @@ export function panelDataKeysForRoute(route: AppRouteState): PanelDataKey[] {
     if (route.serversView === "detail") {
       return serverDetailKeys(route.serverDetailTab);
     }
-    return ["overview"];
+    return ["nodes"];
   }
 
   return [];
+}
+
+/** Интервал фонового опроса (мс) — тяжёлые страницы реже. */
+export function panelDataPollIntervalMs(route: AppRouteState): number {
+  const keys = panelDataKeysForRoute(route);
+  if (!keys.length) return 0;
+
+  if (route.primaryNav === "servers" && route.serversView === "detail" && route.serverDetailTab === "monitoring") {
+    return 2000;
+  }
+  if (route.primaryNav === "servers" && route.serversView === "list") {
+    return 3000;
+  }
+  if (keys.includes("certificates") && keys.length >= 3) {
+    return 4000;
+  }
+  if (route.primaryNav === "logs") {
+    return 5000;
+  }
+  return 3000;
+}
+
+/** Нужен ли agentNodeId в overview (один сервер, вкладка мониторинг). */
+export function panelDataFetchContext(route: AppRouteState): PanelDataFetchContext {
+  if (
+    route.primaryNav === "servers" &&
+    route.serversView === "detail" &&
+    route.serverDetailTab === "monitoring" &&
+    route.selectedServerId
+  ) {
+    return { selectedServerId: route.selectedServerId };
+  }
+  return {};
 }
 
 export async function fetchPanelDataKeys(
   requestFn: PanelRequestFn,
   token: string,
   keys: readonly PanelDataKey[],
+  ctx?: PanelDataFetchContext,
 ): Promise<Partial<Record<PanelDataKey, unknown>>> {
   const unique = uniqueKeys(keys);
   if (!unique.length) return {};
 
   const entries = await Promise.all(
     unique.map(async (key) => {
-      const data = await requestFn(PANEL_DATA_ENDPOINTS[key], "GET", token);
+      const data = await requestFn(endpointForKey(key, ctx), "GET", token);
       return [key, data] as const;
     }),
   );

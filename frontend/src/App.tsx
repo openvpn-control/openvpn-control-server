@@ -5,7 +5,9 @@ import { parseAppRoute, paths } from "./appRoutes";
 import {
   applyPanelDataPatch,
   fetchPanelDataKeys,
+  panelDataFetchContext,
   panelDataKeysForRoute,
+  panelDataPollIntervalMs,
   panelDataRouteKey,
   ALL_PANEL_DATA_KEYS,
   PANEL_DATA_REFRESH,
@@ -2544,13 +2546,14 @@ export default function App() {
   }, [selectedCertClients]);
 
   const filteredOverviewServers = useMemo(() => {
-    const list = overview?.servers || [];
+    const list =
+      Array.isArray(nodes) && nodes.length > 0 ? nodes : (overview?.servers || []);
     const q = serverNameFilter.trim().toLowerCase();
     const filtered = !q ? list : list.filter((s) => String(s.name || "").toLowerCase().includes(q));
     return [...filtered].sort((a, b) =>
       String(a.name || "").localeCompare(String(b.name || ""), "ru", { sensitivity: "base" }),
     );
-  }, [overview, serverNameFilter]);
+  }, [nodes, overview, serverNameFilter]);
 
   const organizationsSortedByName = useMemo(
     () =>
@@ -3070,17 +3073,22 @@ export default function App() {
     [],
   );
 
+  const panelDataFetchInFlightRef = useRef(false);
+
   const refreshPanelData = useCallback(
     async (keys) => {
-      if (!token) return;
+      if (!token || panelDataFetchInFlightRef.current) return;
       const toFetch = keys ?? panelDataKeysForRoute(route);
       if (!toFetch.length) return;
+      panelDataFetchInFlightRef.current = true;
       try {
-        const patch = await fetchPanelDataKeys(request, token, toFetch);
+        const patch = await fetchPanelDataKeys(request, token, toFetch, panelDataFetchContext(route));
         applyPanelDataPatch(patch, panelDataSetters);
         setError("");
       } catch (e) {
         setError(e.message);
+      } finally {
+        panelDataFetchInFlightRef.current = false;
       }
     },
     [token, route, panelDataSetters],
@@ -4074,6 +4082,18 @@ export default function App() {
     }
   }, [selectedServerId, agentUpdateBinaryBase64, agentUpdateFileName, agentUpdateSha256]);
 
+  const loadUserProfileSessions = useCallback(async () => {
+    const uid = selectedUserId;
+    const auth = tokenRef.current;
+    if (!uid || !auth) return;
+    try {
+      const rows = await request(`/api/vpn-users/${encodeURIComponent(uid)}/vpn-sessions`, "GET", auth);
+      setUserProfileSessions(Array.isArray(rows) ? rows : []);
+    } catch {
+      setUserProfileSessions([]);
+    }
+  }, [selectedUserId]);
+
   const openUserSessionDisconnect = useCallback((nodeId, nodeName, sessionId, profileFullName) => {
     userSessionDisconnectTargetRef.current = { nodeId, sessionId };
     const { sessionNumber } = openvpnSessionIdParts(sessionId);
@@ -4117,15 +4137,7 @@ export default function App() {
         error: "",
       });
       await loadData(PANEL_DATA_REFRESH.clients);
-      const uid = selectedUserId;
-      if (uid && tokenRef.current) {
-        const rows = await request(
-          `/api/vpn-users/${encodeURIComponent(uid)}/vpn-sessions`,
-          "GET",
-          tokenRef.current,
-        );
-        setUserProfileSessions(Array.isArray(rows) ? rows : []);
-      }
+      await loadUserProfileSessions();
     } catch (err) {
       setDisconnectingSessionKeys((prev) => {
         const next = prev.filter((x) => x !== sessionKey);
@@ -4142,7 +4154,7 @@ export default function App() {
         error: err.message || "Не удалось завершить сессию",
       }));
     }
-  }, [selectedUserId]);
+  }, [selectedUserId, loadData, loadUserProfileSessions]);
 
   useEffect(() => {
     const activeKeys = new Set();
@@ -4222,13 +4234,23 @@ export default function App() {
   useEffect(() => {
     if (!token) return undefined;
     const keys = panelDataKeysForRoute(route);
-    if (!keys.length) return undefined;
+    const intervalMs = panelDataPollIntervalMs(route);
+    if (!keys.length || intervalMs <= 0) return undefined;
+
     const tick = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       void refreshPanelData(keys);
     };
     tick();
-    const timer = setInterval(tick, 1500);
-    return () => clearInterval(timer);
+    const timer = setInterval(tick, intervalMs);
+    const onVisible = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [token, panelDataRouteKey(route), refreshPanelData]);
 
   useEffect(() => {
@@ -4253,25 +4275,13 @@ export default function App() {
     if (primaryNav !== "users" || usersSub !== "profile" || userProfileTab !== "sessions" || !selectedUserId || !token) {
       return undefined;
     }
-    let cancelled = false;
-    const auth = tokenRef.current;
-    if (!auth) return undefined;
-    (async () => {
-      try {
-        const rows = await request(
-          `/api/vpn-users/${encodeURIComponent(selectedUserId)}/vpn-sessions`,
-          "GET",
-          auth,
-        );
-        if (!cancelled) setUserProfileSessions(Array.isArray(rows) ? rows : []);
-      } catch {
-        if (!cancelled) setUserProfileSessions([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [primaryNav, usersSub, userProfileTab, selectedUserId, token]);
+    void loadUserProfileSessions();
+    const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void loadUserProfileSessions();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [primaryNav, usersSub, userProfileTab, selectedUserId, token, loadUserProfileSessions]);
 
   useEffect(() => {
     setTablePages((prev) => ({ ...prev, serverSessions: 1 }));

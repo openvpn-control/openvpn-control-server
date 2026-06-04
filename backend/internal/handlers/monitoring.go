@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,8 +20,18 @@ type Monitoring struct {
 
 func (h *Monitoring) Overview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	agentNodeID := strings.TrimSpace(r.URL.Query().Get("agentNodeId"))
+
 	var agentsRaw []byte
-	if err := h.Pool.QueryRow(ctx, `SELECT COALESCE(json_agg(row_to_json(a)), '[]'::json)::text FROM "AgentNode" a`).Scan(&agentsRaw); err != nil {
+	var err error
+	if agentNodeID != "" {
+		err = h.Pool.QueryRow(ctx, `
+			SELECT COALESCE(json_agg(row_to_json(a)), '[]'::json)::text
+			FROM "AgentNode" a WHERE a.id = $1`, agentNodeID).Scan(&agentsRaw)
+	} else {
+		err = h.Pool.QueryRow(ctx, `SELECT COALESCE(json_agg(row_to_json(a)), '[]'::json)::text FROM "AgentNode" a`).Scan(&agentsRaw)
+	}
+	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -29,9 +40,16 @@ func (h *Monitoring) Overview(w http.ResponseWriter, r *http.Request) {
 
 	since := time.Now().UTC().Add(-time.Duration(h.Cfg.AgentMetricHistoryMinutes) * time.Minute)
 	var historyRaw []byte
-	_ = h.Pool.QueryRow(ctx, `
-		SELECT COALESCE(json_agg(row_to_json(m)), '[]'::json)::text
-		FROM "AgentMetricSnapshot" m WHERE "createdAt" >= $1`, since).Scan(&historyRaw)
+	if agentNodeID != "" {
+		_ = h.Pool.QueryRow(ctx, `
+			SELECT COALESCE(json_agg(row_to_json(m)), '[]'::json)::text
+			FROM "AgentMetricSnapshot" m
+			WHERE "createdAt" >= $1 AND m."agentNodeId" = $2`, since, agentNodeID).Scan(&historyRaw)
+	} else {
+		_ = h.Pool.QueryRow(ctx, `
+			SELECT COALESCE(json_agg(row_to_json(m)), '[]'::json)::text
+			FROM "AgentMetricSnapshot" m WHERE "createdAt" >= $1`, since).Scan(&historyRaw)
+	}
 	var history []map[string]any
 	_ = json.Unmarshal(historyRaw, &history)
 
