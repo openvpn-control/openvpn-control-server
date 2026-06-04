@@ -204,10 +204,17 @@ func SyncClientsSnapshot(ctx context.Context, pool *pgxpool.Pool, cfg config.Con
 		}
 	}
 
-	_, _ = pool.Exec(ctx, `
-		UPDATE "ClientIpAssignment"
-		SET "endedAt" = $2
-		WHERE "endedAt" IS NULL AND "lastSeenAt" < $1`, sessionCutoff, now)
+	// Закрываем устаревшие сессии только на узлах, где опрос management прошёл успешно.
+	for _, row := range clientRows {
+		if !row.OK {
+			continue
+		}
+		_, _ = pool.Exec(ctx, `
+			UPDATE "ClientIpAssignment"
+			SET "endedAt" = $2
+			WHERE "agentNodeId" = $1 AND "endedAt" IS NULL AND "lastSeenAt" < $3`,
+			row.NodeID, now, sessionCutoff)
+	}
 
 	endedRetention := now.Add(-30 * 24 * time.Hour)
 	_, _ = pool.Exec(ctx, `DELETE FROM "ClientIpAssignment" WHERE "endedAt" IS NOT NULL AND "endedAt" < $1`, endedRetention)
