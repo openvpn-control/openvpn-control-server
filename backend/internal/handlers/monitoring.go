@@ -9,6 +9,7 @@ import (
 
 	"github.com/openvpn-control/openvpn-control-server/backend/internal/config"
 	"github.com/openvpn-control/openvpn-control-server/backend/internal/httpx"
+	"github.com/openvpn-control/openvpn-control-server/backend/internal/metrictime"
 )
 
 type Monitoring struct {
@@ -26,7 +27,7 @@ func (h *Monitoring) Overview(w http.ResponseWriter, r *http.Request) {
 	var agents []map[string]any
 	_ = json.Unmarshal(agentsRaw, &agents)
 
-	since := time.Now().Add(-time.Duration(h.Cfg.AgentMetricHistoryMinutes) * time.Minute)
+	since := time.Now().UTC().Add(-time.Duration(h.Cfg.AgentMetricHistoryMinutes) * time.Minute)
 	var historyRaw []byte
 	_ = h.Pool.QueryRow(ctx, `
 		SELECT COALESCE(json_agg(row_to_json(m)), '[]'::json)::text
@@ -36,6 +37,7 @@ func (h *Monitoring) Overview(w http.ResponseWriter, r *http.Request) {
 
 	byNode := map[string][]map[string]any{}
 	for _, row := range history {
+		metrictime.ApplyToMetricRow(row)
 		nid, _ := row["agentNodeId"].(string)
 		byNode[nid] = append(byNode[nid], row)
 	}

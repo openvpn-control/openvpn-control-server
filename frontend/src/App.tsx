@@ -6,6 +6,7 @@ import { DocumentationPage } from "./DocumentationPage";
 import { OPENVPN_SERVER_SETTINGS_FIELDS } from "./openvpnServerSettingsMeta";
 import { OPENVPN_CLIENT_SETTINGS_FIELDS } from "./openvpnClientSettingsMeta";
 import MonitoringCharts from "./MonitoringCharts";
+import { parseUtcMs } from "./monitoringTime";
 
 const PANEL_ONLY_OPENVPN_KEYS = new Set([
   "panelRootCaId",
@@ -947,11 +948,11 @@ function buildDnsmasqTextFromDraft(draft) {
 
 function mergeLiveMetricSamples(recentMetrics, live) {
   const sorted = [...(recentMetrics || [])].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    (a, b) => parseUtcMs(a.createdAt) - parseUtcMs(b.createdAt),
   );
   const liveT = Date.now();
   const last = sorted[sorted.length - 1];
-  if (last && Math.abs(new Date(last.createdAt).getTime() - liveT) < 800) {
+  if (last && Math.abs(parseUtcMs(last.createdAt) - liveT) < 800) {
     const copy = [...sorted];
     copy[copy.length - 1] = {
       ...last,
@@ -7293,7 +7294,11 @@ export default function App() {
                     {serverDetailTab === "monitoring" && (
                       <>
                         <h2 className="server-detail-section-title">Мониторинг</h2>
-                        <MonitoringCharts samples={selectedServerMonitoringSamples} current={selectedServer} />
+                        <MonitoringCharts
+                          samples={selectedServerMonitoringSamples}
+                          current={selectedServer}
+                          historyMinutes={overview?.metricHistoryMinutes ?? 15}
+                        />
                       </>
                     )}
 

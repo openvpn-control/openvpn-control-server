@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
+import { monitoringWindowMs, parseUtcMs } from "./monitoringTime";
 
 const LEFT_AXIS_PX = 40;
 
@@ -32,7 +33,7 @@ function fmtRate(v) {
 
 function toChartSeries(samples, seriesGetters) {
   const rows = [...(samples || [])]
-    .map((s) => ({ ...s, ts: new Date(s.createdAt).getTime() }))
+    .map((s) => ({ ...s, ts: parseUtcMs(s.createdAt) }))
     .filter((s) => Number.isFinite(s.ts))
     .sort((a, b) => a.ts - b.ts);
   const x = rows.map((r) => r.ts);
@@ -101,12 +102,24 @@ interface ChartPanelProps {
   samples: Array<Record<string, unknown>>;
   limitLabel?: string;
   legendRows?: Array<Array<{ label: string; value?: string; swatch?: string }>>;
+  historyMinutes?: number;
 }
 
-function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel, legendRows }: ChartPanelProps) {
+function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel, legendRows, historyMinutes }: ChartPanelProps) {
   const holderRef = useRef(null);
   const [hover, setHover] = useState(null);
   const chart = useMemo(() => toChartSeries(samples, series.map((s) => s.getter)), [samples, series]);
+
+  const [axisTick, setAxisTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setAxisTick((n) => n + 1), 15000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const xRange = useMemo(() => {
+    const xMax = Date.now();
+    return [xMax - monitoringWindowMs(historyMinutes), xMax];
+  }, [historyMinutes, axisTick, chart.data]);
 
   const optionsFactory = useMemo(
     () => (width) => ({
@@ -115,7 +128,7 @@ function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel,
       class: "grafana-like",
       padding: [12, 10, 18, LEFT_AXIS_PX],
       scales: {
-        x: { time: false },
+        x: { time: false, range: xRange },
         y: { auto: false, range: [0, yMax] },
       },
       axes: [
@@ -173,15 +186,17 @@ function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel,
         ],
       },
     }),
-    [series, yFormat, yMax, yTicks],
+    [series, yFormat, yMax, yTicks, xRange],
   );
 
   const plotRef = useUplot(holderRef, optionsFactory, chart.data, setHover);
   useEffect(() => {
-    if (plotRef.current && Number.isFinite(yMax)) {
+    if (!plotRef.current) return;
+    if (Number.isFinite(yMax)) {
       plotRef.current.setScale("y", { min: 0, max: yMax });
     }
-  }, [plotRef, yMax]);
+    plotRef.current.setScale("x", { min: xRange[0], max: xRange[1] });
+  }, [plotRef, yMax, xRange]);
 
   return (
     <div className="server-monitoring-panel">
@@ -224,9 +239,10 @@ function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel,
 interface MonitoringChartsProps {
   samples?: Array<Record<string, unknown>>;
   current?: Record<string, unknown>;
+  historyMinutes?: number;
 }
 
-export default function MonitoringCharts({ samples, current }: MonitoringChartsProps) {
+export default function MonitoringCharts({ samples, current, historyMinutes = 15 }: MonitoringChartsProps) {
   const safeSamples = Array.isArray(samples) ? samples : [];
   const safeMin = (vals) => {
     const arr = (vals || []).filter((v) => Number.isFinite(v));
@@ -262,6 +278,7 @@ export default function MonitoringCharts({ samples, current }: MonitoringChartsP
         yTicks={[0, 50, 100, 150, 200, 250]}
         yFormat={(v) => `${Math.round(v)}%`}
         samples={safeSamples}
+        historyMinutes={historyMinutes}
         series={[
           { label: "CPU", color: "#e59649", fill: "#efd7bc55", getter: (r) => Number(r.cpuPercent ?? 0), valueFormat: (v) => `${Math.round(v)}%` },
         ]}
@@ -281,6 +298,7 @@ export default function MonitoringCharts({ samples, current }: MonitoringChartsP
         yTicks={[0, 20, 40, 60, 80, 100]}
         yFormat={(v) => `${Math.round(v)}%`}
         samples={safeSamples}
+        historyMinutes={historyMinutes}
         series={[
           { label: "RAM", color: "#22c55e", fill: "#bbf7d055", getter: (r) => Number(r.memoryPercent ?? 0), valueFormat: (v) => `${Math.round(v)}%` },
         ]}
@@ -300,6 +318,7 @@ export default function MonitoringCharts({ samples, current }: MonitoringChartsP
         yTicks={[0, 100, 200, 300, 400].map((v) => v * 1000 * 1000)}
         yFormat={(v) => (v === 0 ? "0 Bps" : `${Math.round(v / (1000 * 1000))} MBps`)}
         samples={safeSamples}
+        historyMinutes={historyMinutes}
         series={[
           { label: "Disk read", color: "#22a3de", fill: "#c4e8f833", getter: (r) => Number(r.diskReadBps ?? 0), valueFormat: fmtRate },
           { label: "Disk write", color: "#ef6f63", fill: "#f6c9c233", getter: (r) => Number(r.diskWriteBps ?? 0), valueFormat: fmtRate },
@@ -326,6 +345,7 @@ export default function MonitoringCharts({ samples, current }: MonitoringChartsP
         yTicks={[0, 10, 20, 30, 40].map((v) => v * 1000 * 1000)}
         yFormat={(v) => `${Math.round(v / (1000 * 1000))} Mbps`}
         samples={safeSamples}
+        historyMinutes={historyMinutes}
         series={[
           { label: "Bandwidth in", color: "#0d94a7", fill: "#b7e7ea2e", getter: (r) => Number(r.networkInBps ?? 0), valueFormat: fmtRate },
           { label: "Bandwidth out", color: "#7681e7", fill: "#ced3ff2e", getter: (r) => Number(r.networkOutBps ?? 0), valueFormat: fmtRate },

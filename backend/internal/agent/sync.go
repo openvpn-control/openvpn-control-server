@@ -73,16 +73,17 @@ func syncNodeMetrics(ctx context.Context, pool *pgxpool.Pool, cfg config.Config,
 	if err != nil {
 		return syncResult{Node: n.Name, OK: false, Error: err.Error()}
 	}
+	metricAt := time.Now().UTC()
 	_, _ = pool.Exec(ctx, `
 		INSERT INTO "AgentMetricSnapshot" (id, "agentNodeId", "cpuPercent", "memoryPercent", "diskPercent",
 			"diskReadBps", "diskWriteBps", "networkInBps", "networkOutBps", "activeClients", "createdAt")
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		ksuid.New().String(), n.ID, cpu, mem, disk,
 		num(metrics["diskReadBps"]), num(metrics["diskWriteBps"]),
 		num(metrics["networkInBps"]), num(metrics["networkOutBps"]),
-		int(num(metrics["activeClients"])),
+		int(num(metrics["activeClients"])), metricAt,
 	)
-	cutoff := time.Now().Add(-time.Duration(cfg.AgentMetricHistoryMinutes) * time.Minute)
+	cutoff := metricAt.Add(-time.Duration(cfg.AgentMetricHistoryMinutes) * time.Minute)
 	_, _ = pool.Exec(ctx, `DELETE FROM "AgentMetricSnapshot" WHERE "createdAt" < $1`, cutoff)
 
 	if status == "ONLINE" && ProcessPanelTasks != nil {
