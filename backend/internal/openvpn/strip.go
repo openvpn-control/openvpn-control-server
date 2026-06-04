@@ -74,6 +74,28 @@ func isPanelMetadataOrMaterialPath(key string) bool {
 	return ok
 }
 
+// IncomingIsPanelMetadataOrMaterialPathsOnly — true, если в запросе только panel* и пути к PEM
+// (частичное сохранение с вкладки сертификатов). Не вызывать POST /openvpn/settings на агенте.
+func IncomingIsPanelMetadataOrMaterialPathsOnly(incoming map[string]any) bool {
+	if incoming == nil || len(incoming) == 0 {
+		return false
+	}
+	for k := range incoming {
+		if !isPanelMetadataOrMaterialPath(k) {
+			return false
+		}
+	}
+	return true
+}
+
+// SkipAgentSettingsPush — не пересобирать server.conf на агенте (только БД + sync-задачи).
+func SkipAgentSettingsPush(prev, merged, incoming map[string]any) bool {
+	if IncomingIsPanelMetadataOrMaterialPathsOnly(incoming) {
+		return true
+	}
+	return OnlyPanelMetadataAndMaterialPathsChanged(prev, merged)
+}
+
 // OnlyPanelMetadataAndMaterialPathsChanged — true, если изменились только panel* и пути к материалам
 // (привязка УЦ, cert/dh/tls sync). В этом случае server.conf на агенте не пересобираем.
 func OnlyPanelMetadataAndMaterialPathsChanged(prev, merged map[string]any) bool {

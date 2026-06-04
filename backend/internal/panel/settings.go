@@ -180,9 +180,9 @@ func PostOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeID
 		prev = map[string]any{}
 	}
 	merged := mergeSettings(prev, incoming)
+	skipAgentPush := openvpn.SkipAgentSettingsPush(prev, merged, incoming)
 	ensureOpenvpnSettingsReady(merged)
-	panelOnly := openvpn.OnlyPanelMetadataAndMaterialPathsChanged(prev, merged)
-	if !panelOnly && !openvpn.AgentSettingsEqual(prev, merged) {
+	if !skipAgentPush && !openvpn.AgentSettingsEqual(prev, merged) {
 		if _, err := agent.PostOpenVPNSettings(ctx, an, openvpn.PrepareAgentSettings(merged)); err != nil {
 			return mapAgentError(err)
 		}

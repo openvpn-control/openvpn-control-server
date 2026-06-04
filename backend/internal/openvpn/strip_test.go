@@ -24,6 +24,37 @@ func TestOnlyPanelMetadataAndMaterialPathsChanged(t *testing.T) {
 	}
 }
 
+func TestIncomingIsPanelMetadataOrMaterialPathsOnly(t *testing.T) {
+	incoming := map[string]any{
+		"panelRootCaId": "ca1",
+		"ca":            "/etc/openvpn/ca.crt",
+		"crl-verify":    "/etc/openvpn/crl.pem",
+	}
+	if !IncomingIsPanelMetadataOrMaterialPathsOnly(incoming) {
+		t.Fatal("expected panel partial incoming")
+	}
+	incoming["port"] = float64(1195)
+	if IncomingIsPanelMetadataOrMaterialPathsOnly(incoming) {
+		t.Fatal("port in incoming should not be panel-only")
+	}
+}
+
+func TestSkipAgentSettingsPushDespiteEnsureSideEffects(t *testing.T) {
+	prev := map[string]any{"port": float64(1194), "dh": ""}
+	incoming := map[string]any{
+		"panelRootCaId": "ca1",
+		"ca":            "/etc/openvpn/ca.crt",
+		"crl-verify":    "/etc/openvpn/crl.pem",
+	}
+	merged := map[string]any{"port": float64(1194), "dh": "", "panelRootCaId": "ca1", "ca": "/etc/openvpn/ca.crt", "crl-verify": "/etc/openvpn/crl.pem"}
+	// simulate ensureOpenvpnSettingsReady side effect on merged only
+	merged["data-ciphers"] = "AES-256-GCM:AES-128-GCM"
+	merged["auth"] = "SHA256"
+	if !SkipAgentSettingsPush(prev, merged, incoming) {
+		t.Fatal("panel partial must skip agent even if merged gained crypto defaults")
+	}
+}
+
 func TestOnlyPanelMetadataAndMaterialPathsChangedFalseOnPort(t *testing.T) {
 	prev := map[string]any{"port": float64(1194)}
 	merged := map[string]any{"port": float64(1195)}
