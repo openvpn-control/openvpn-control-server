@@ -13,19 +13,19 @@ func TestNormalizeServerSettingsKeepsFragmentZero(t *testing.T) {
 	}
 }
 
-func TestNormalizeServerSettingsClearsEmptyRemoteCertTls(t *testing.T) {
-	settings := map[string]any{"remote-cert-tls": "", "port": float64(1194)}
-	NormalizeServerSettings(settings)
-	if _, ok := settings["remote-cert-tls"]; ok {
-		t.Fatalf("remote-cert-tls should be removed, got %v", settings["remote-cert-tls"])
+func TestNormalizeServerSettingsKeepsAuthWithGcmDataCiphers(t *testing.T) {
+	settings := map[string]any{
+		"data-ciphers": "AES-256-GCM:AES-128-GCM",
+		"auth":         "SHA256",
+		"port":         float64(1194),
 	}
-}
-
-func TestNormalizeServerSettingsKeepsRemoteCertTls(t *testing.T) {
-	settings := map[string]any{"remote-cert-tls": "client", "port": float64(1194)}
 	NormalizeServerSettings(settings)
-	if settings["remote-cert-tls"] != "client" {
-		t.Fatalf("remote-cert-tls=%v", settings["remote-cert-tls"])
+	if settings["auth"] != "SHA256" {
+		t.Fatalf("auth should remain in DB settings, got %v", settings["auth"])
+	}
+	out := PrepareAgentSettings(settings)
+	if _, ok := out["auth"]; ok {
+		t.Fatal("auth should be stripped for agent/server.conf with GCM")
 	}
 }
 

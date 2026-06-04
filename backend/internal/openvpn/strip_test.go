@@ -2,6 +2,17 @@ package openvpn
 
 import "testing"
 
+func TestStripPanelOnlySettingsRemovesRemoteCertTls(t *testing.T) {
+	in := map[string]any{"port": float64(1194), "remote-cert-tls": "server", "auth": "SHA256"}
+	got := StripPanelOnlySettings(in)
+	if _, ok := got["remote-cert-tls"]; ok {
+		t.Fatal("remote-cert-tls is client-only, must not go to agent")
+	}
+	if got["auth"] != "SHA256" {
+		t.Fatalf("auth=%v", got["auth"])
+	}
+}
+
 func TestStripEmptyManagedDirectiveValuesDropsEmptyDh(t *testing.T) {
 	in := map[string]any{"port": float64(1194), "dh": "", "ca": "/etc/openvpn/ca.crt"}
 	got := StripEmptyManagedDirectiveValues(in)

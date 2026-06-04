@@ -17,6 +17,7 @@ const PANEL_ONLY_OPENVPN_KEYS = new Set([
   "nobind",
   "key-direction",
   "client-verb",
+  "remote-cert-tls",
 ]);
 
 const PANEL_SAVE_EXTRA_KEYS = [
@@ -37,11 +38,18 @@ const OPENVPN_SERVER_FORM_SHARED_DIRECTIVES = new Set([
   "proto",
   "persist-key",
   "persist-tun",
-  "remote-cert-tls",
+  "data-ciphers-fallback",
   "comp-lzo",
   "mute",
 ]);
-const PANEL_CLIENT_PROFILE_KEYS = ["remote", "resolv-retry", "nobind", "key-direction", "client-verb"];
+const PANEL_CLIENT_PROFILE_KEYS = [
+  "remote",
+  "resolv-retry",
+  "nobind",
+  "key-direction",
+  "client-verb",
+  "remote-cert-tls",
+];
 
 /** Default server.conf paths when linking panel root CA / server cert (sync tasks write these files). */
 function openvpnCertPathsPartial(settings, { panelRootCaId, panelServerCertId } = {}) {
@@ -120,6 +128,11 @@ function buildOpenVpnSettingsForPanelSave(stateObj) {
       const raw = stateObj[f.key];
       base[f.key] =
         raw === undefined || raw === null || raw === "" ? "" : String(raw).trim();
+      continue;
+    }
+    if (f.type === "text") {
+      const raw = stateObj[f.key];
+      base[f.key] = raw === undefined || raw === null ? "" : String(raw).trim();
     }
   }
   for (const pk of PANEL_SAVE_EXTRA_KEYS) {
@@ -293,6 +306,24 @@ function fallbackServerDerivedClientLines(serverSettings) {
 import { API_URL } from "./apiConfig";
 const TOKEN_STORAGE_KEY = "ovpn_control_admin_token";
 const SESSION_INVALID_EVENT = "ovpn:session-invalid";
+
+/** OpenVPN работает: management или служба systemd active/running. */
+function isOpenvpnUp(server) {
+  if (!server || typeof server !== "object") return false;
+  if (server.openvpnRunning) return true;
+  const active = String(server.openvpnServiceActiveState || "").trim().toLowerCase();
+  const sub = String(server.openvpnServiceSubState || "").trim().toLowerCase();
+  const pid = Number(server.openvpnServiceMainPid) || 0;
+  return active === "active" && (sub === "running" || sub === "started" || pid > 0);
+}
+
+function openvpnStatusLabel(server) {
+  if (!isOpenvpnUp(server)) return "Не работает";
+  if (!server.openvpnRunning) {
+    return "Работает (служба systemd, management недоступен)";
+  }
+  return "Работает";
+}
 const DISCONNECTING_SESSIONS_STORAGE_KEY = "ovpn:disconnecting-sessions";
 
 function parseJwtPayload(token) {
@@ -3437,39 +3468,6 @@ export default function App() {
     }
   }, [selectedServerId, serverOpenVpnConfigDiff, serverOpenVpnSettings]);
 
-  const saveServerOpenVpnClientSettings = useCallback(async () => {
-    if (!selectedServerId || !tokenRef.current) return;
-    setServerOpenVpnClientSaving(true);
-    setServerOpenVpnClientError("");
-    setError("");
-    try {
-      const payload = buildOpenVpnClientConfigPayload(serverOpenVpnClientSettings);
-      const data = await request(
-        `/api/panel/nodes/${encodeURIComponent(selectedServerId)}/openvpn-client-config-save`,
-        "POST",
-        tokenRef.current,
-        { settings: payload },
-      );
-      const s = data?.settings && typeof data.settings === "object" && !Array.isArray(data.settings) ? data.settings : {};
-      const versions = Array.isArray(data?.versions) ? data.versions : [];
-      setServerOpenVpnClientSettings({ ...s });
-      setServerOpenVpnClientVersions(versions);
-      const activeVersionId = String(data?.activeVersionId || versions[0]?.id || "");
-      const selectedVersionId = String(data?.selectedVersionId || activeVersionId || versions[0]?.id || "");
-      setServerOpenVpnClientActiveVersionId(activeVersionId);
-      setServerOpenVpnClientSelectedVersionId(selectedVersionId);
-      setServerOpenVpnSaveModal({
-        open: true,
-        text: data?.message || "Конфигурация клиента сохранена.",
-      });
-    } catch (err) {
-      setServerOpenVpnClientError(err?.message || "Не удалось сохранить конфигурацию клиента");
-      throw err;
-    } finally {
-      setServerOpenVpnClientSaving(false);
-    }
-  }, [selectedServerId, serverOpenVpnClientSettings]);
-
   const deleteServerOpenVpnClientVersion = useCallback(async () => {
     if (!selectedServerId || !tokenRef.current || !serverOpenVpnClientDeleteVersionModal.versionId) return;
     setServerOpenVpnClientDeleteVersionModal((prev) => ({ ...prev, busy: true, error: "" }));
@@ -3573,6 +3571,32 @@ export default function App() {
     },
     [selectedServerId],
   );
+
+  const saveServerOpenVpnClientSettings = useCallback(async () => {
+    if (!selectedServerId || !tokenRef.current) return;
+    setServerOpenVpnClientSaving(true);
+    setServerOpenVpnClientError("");
+    setError("");
+    try {
+      const partial = { ...buildOpenVpnClientConfigPayload(serverOpenVpnClientSettings) };
+      for (const k of PANEL_CLIENT_PROFILE_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(serverOpenVpnClientSettings, k)) continue;
+        const v = serverOpenVpnClientSettings[k];
+        if (typeof v === "boolean") partial[k] = v;
+        else partial[k] = v === undefined || v === null ? "" : String(v);
+      }
+      await persistOpenVpnPanelPartial(partial);
+      setServerOpenVpnSaveModal({
+        open: true,
+        text: "Параметры клиентского профиля сохранены в настройках узла.",
+      });
+    } catch (err) {
+      setServerOpenVpnClientError(err?.message || "Не удалось сохранить конфигурацию клиента");
+      throw err;
+    } finally {
+      setServerOpenVpnClientSaving(false);
+    }
+  }, [selectedServerId, serverOpenVpnClientSettings, persistOpenVpnPanelPartial]);
 
   const submitSrvCertCreate = async () => {
     const rid = String(serverOpenVpnSettings.panelRootCaId || "").trim();
@@ -4319,18 +4343,23 @@ export default function App() {
       setServerOpenVpnClientError("");
       try {
         const data = await request(
-          `/api/panel/nodes/${encodeURIComponent(selectedServerId)}/openvpn-client-config`,
+          `/api/panel/nodes/${encodeURIComponent(selectedServerId)}/openvpn-settings`,
           "GET",
           auth,
         );
         if (cancelled) return;
-        const s = data?.settings && typeof data.settings === "object" && !Array.isArray(data.settings) ? data.settings : {};
-        setServerOpenVpnClientSettings({ ...s });
-        const versions = Array.isArray(data?.versions) ? data.versions : [];
-        setServerOpenVpnClientVersions(versions);
-        const activeVersionId = String(data?.activeVersionId || versions[0]?.id || "");
-        setServerOpenVpnClientActiveVersionId(activeVersionId);
-        setServerOpenVpnClientSelectedVersionId(activeVersionId);
+        const all = data?.settings && typeof data.settings === "object" && !Array.isArray(data.settings) ? data.settings : {};
+        const merged = {};
+        for (const f of OPENVPN_CLIENT_SETTINGS_FIELDS) {
+          if (Object.prototype.hasOwnProperty.call(all, f.key)) merged[f.key] = all[f.key];
+        }
+        for (const k of PANEL_CLIENT_PROFILE_KEYS) {
+          if (Object.prototype.hasOwnProperty.call(all, k)) merged[k] = all[k];
+        }
+        setServerOpenVpnClientSettings(merged);
+        setServerOpenVpnClientVersions([]);
+        setServerOpenVpnClientActiveVersionId("");
+        setServerOpenVpnClientSelectedVersionId("");
       } catch (err) {
         if (cancelled) return;
         setServerOpenVpnClientSettings({});
@@ -4378,7 +4407,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [primaryNav, serversView, serverDetailTab, selectedServerId, isAuthorized]);
+  }, [primaryNav, serversView, serverDetailTab, selectedServerId, isAuthorized, serverOpenVpnSettings]);
 
   useEffect(() => {
     if (
@@ -8964,9 +8993,18 @@ export default function App() {
                               <tr>
                                 <th scope="row" className="app-table-nowrap">OpenVPN (статус)</th>
                                 <td>
-                                  <span className={`app-status ${selectedServer.openvpnRunning ? "app-status--ok" : "app-status--off"}`}>
-                                    {selectedServer.openvpnRunning ? "Running" : "Not running"}
+                                  <span className={`app-status ${isOpenvpnUp(selectedServer) ? "app-status--ok" : "app-status--off"}`}>
+                                    {openvpnStatusLabel(selectedServer)}
                                   </span>
+                                </td>
+                              </tr>
+                              <tr>
+                                <th scope="row" className="app-table-nowrap">Служба systemd</th>
+                                <td className="app-table-mono">
+                                  {selectedServer.openvpnServiceActiveState || "—"} / {selectedServer.openvpnServiceSubState || "—"}
+                                  {Number(selectedServer.openvpnServiceMainPid) > 0
+                                    ? ` · PID ${selectedServer.openvpnServiceMainPid}`
+                                    : ""}
                                 </td>
                               </tr>
                               <tr>
@@ -8992,16 +9030,6 @@ export default function App() {
                               <tr>
                                 <th scope="row" className="app-table-nowrap">Имя unit</th>
                                 <td className="app-table-mono">{selectedServer.openvpnServiceUnit || "—"}</td>
-                              </tr>
-                              <tr>
-                                <th scope="row" className="app-table-nowrap">ActiveState / SubState</th>
-                                <td className="app-table-mono">
-                                  {selectedServer.openvpnServiceActiveState || "unknown"} / {selectedServer.openvpnServiceSubState || "unknown"}
-                                </td>
-                              </tr>
-                              <tr>
-                                <th scope="row" className="app-table-nowrap">Main PID</th>
-                                <td>{selectedServer.openvpnServiceMainPid || "—"}</td>
                               </tr>
                               <tr>
                                 <th scope="row" className="app-table-nowrap">Активна с</th>

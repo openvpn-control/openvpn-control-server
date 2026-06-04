@@ -41,6 +41,10 @@ func MergeSettingsForDisplay(db, agent map[string]any) map[string]any {
 			out[k] = v
 		}
 	}
+	// auth (HMAC) — настройка панели; в server.conf при GCM не пишется, снимок агента не должен затирать БД.
+	if v, ok := db["auth"]; ok && !settingValueIsEmpty(v) {
+		out["auth"] = v
+	}
 	return out
 }
 

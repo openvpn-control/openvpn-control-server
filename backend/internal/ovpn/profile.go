@@ -56,11 +56,17 @@ func BuildClientOvpn(in BuildInput) string {
 	if boolOr(settings["nobind"], true) {
 		lines = append(lines, "nobind")
 	}
-	if v := str(settings["persist-key"]); v != "" {
+	if directiveFlagEnabled(settings, "persist-key") {
 		lines = append(lines, "persist-key")
 	}
-	if v := str(settings["persist-tun"]); v != "" {
+	if directiveFlagEnabled(settings, "persist-tun") {
 		lines = append(lines, "persist-tun")
+	}
+	if v := str(settings["data-ciphers"]); v != "" {
+		lines = append(lines, "data-ciphers "+v)
+	}
+	if v := str(settings["data-ciphers-fallback"]); v != "" {
+		lines = append(lines, "data-ciphers-fallback "+v)
 	}
 	lines = append(lines, "remote-cert-tls "+deriveRemoteCertTLS(settings["remote-cert-tls"]))
 	if in.TLSAuthPEM != "" {
@@ -132,6 +138,26 @@ func parseNumericSetting(v any) (float64, bool) {
 		var f float64
 		_, err := fmt.Sscanf(s, "%f", &f)
 		return f, err == nil
+	}
+}
+
+// directiveFlagEnabled — флаговые директивы OpenVPN без значения (persist-key, persist-tun, …).
+func directiveFlagEnabled(settings map[string]any, key string) bool {
+	if settings == nil {
+		return false
+	}
+	v, ok := settings[key]
+	if !ok {
+		return false
+	}
+	switch t := v.(type) {
+	case bool:
+		return t
+	case string:
+		s := strings.TrimSpace(strings.ToLower(t))
+		return s == "1" || s == "true" || s == "yes"
+	default:
+		return false
 	}
 }
 

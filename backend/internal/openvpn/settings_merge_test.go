@@ -20,20 +20,20 @@ func TestMergeSettingsForDisplayAgentWinsOverStaleDB(t *testing.T) {
 	}
 }
 
-func TestMergeSettingsForDisplayFillsRemoteCertTlsFromDBWhenMissingOnAgent(t *testing.T) {
-	agent := map[string]any{"port": float64(1194)}
-	db := map[string]any{"port": float64(1194), "remote-cert-tls": "client"}
+func TestMergeSettingsForDisplayKeepsAuthFromDBWithGcmAgentSnapshot(t *testing.T) {
+	agent := map[string]any{"data-ciphers": "AES-256-GCM:AES-128-GCM", "port": float64(1194)}
+	db := map[string]any{"data-ciphers": "AES-256-GCM:AES-128-GCM", "port": float64(1194), "auth": "SHA256"}
 	got := MergeSettingsForDisplay(db, agent)
-	if got["remote-cert-tls"] != "client" {
-		t.Fatalf("remote-cert-tls=%v", got["remote-cert-tls"])
+	if got["auth"] != "SHA256" {
+		t.Fatalf("auth=%v", got["auth"])
 	}
 }
 
-func TestMergeSettingsForDisplayPrefersAgentRemoteCertTlsOverDB(t *testing.T) {
-	agent := map[string]any{"port": float64(1194), "remote-cert-tls": "client"}
+func TestMergeSettingsForDisplayKeepsRemoteCertTlsFromDBForClientProfile(t *testing.T) {
+	agent := map[string]any{"port": float64(1194)}
 	db := map[string]any{"port": float64(1194), "remote-cert-tls": "server"}
 	got := MergeSettingsForDisplay(db, agent)
-	if got["remote-cert-tls"] != "client" {
+	if got["remote-cert-tls"] != "server" {
 		t.Fatalf("remote-cert-tls=%v", got["remote-cert-tls"])
 	}
 }

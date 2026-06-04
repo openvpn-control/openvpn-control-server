@@ -41,7 +41,6 @@ func InitialServerSettings() map[string]any {
 		"tls-crypt":              "",
 		"tls-crypt-v2":           "",
 		"crl-verify":             "",
-		"remote-cert-tls":        "",
 		"verify-x509-name":       "",
 		"management":             "",
 		"status":                 "",
@@ -56,6 +55,7 @@ func InitialServerSettings() map[string]any {
 		"client-to-client":       false,
 		"float":                  false,
 		"data-ciphers":           "AES-256-GCM:AES-128-GCM",
+		"data-ciphers-fallback":  "",
 		"tls-ciphersuites":       "",
 		"cipher":                 "",
 		"auth":                   "SHA256",
@@ -120,9 +120,7 @@ func EnsureServerCryptoDefaults(settings map[string]any) {
 		delete(settings, "cipher")
 	}
 	dc := settingStr(settings, "data-ciphers")
-	if !dataCiphersUseAuth(dc) {
-		delete(settings, "auth")
-	} else if settingStr(settings, "auth") == "" {
+	if settingStr(settings, "auth") == "" && dataCiphersUseAuth(dc) {
 		settings["auth"] = "SHA256"
 	}
 }

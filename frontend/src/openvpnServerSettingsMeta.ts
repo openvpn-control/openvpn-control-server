@@ -185,17 +185,6 @@ export const OPENVPN_SERVER_SETTINGS_FIELDS: SettingsFieldMeta[] = [
     placeholder: "/etc/openvpn/crl.pem",
   },
   {
-    key: "remote-cert-tls",
-    label: "Remote-cert-tls",
-    description: "Ожидаемый тип удалённого сертификата у клиента (обычно client для сервера).",
-    type: "select",
-    options: [
-      { value: "", label: "— не задано" },
-      { value: "client", label: "client" },
-      { value: "server", label: "server" },
-    ],
-  },
-  {
     key: "verify-x509-name",
     label: "Verify-x509-name",
     description: "Проверка имени в сертификате клиента, например CN или формат из man openvpn.",
@@ -289,6 +278,14 @@ export const OPENVPN_SERVER_SETTINGS_FIELDS: SettingsFieldMeta[] = [
     placeholder: "AES-256-GCM:AES-128-GCM",
   },
   {
+    key: "data-ciphers-fallback",
+    label: "Data-ciphers-fallback",
+    description:
+      "Резервные шифры данных для согласования со старыми клиентами/пирами (OpenVPN 2.5+), например AES-256-CBC:AES-128-CBC. Используется в server.conf и в клиентском .ovpn.",
+    type: "text",
+    placeholder: "AES-256-CBC:AES-128-CBC",
+  },
+  {
     key: "tls-ciphersuites",
     label: "TLS-ciphersuites",
     description: "Наборы TLS 1.3 для управляющего канала (если используется).",
@@ -305,7 +302,8 @@ export const OPENVPN_SERVER_SETTINGS_FIELDS: SettingsFieldMeta[] = [
   {
     key: "auth",
     label: "Auth (HMAC)",
-    description: "Алгоритм HMAC для tls-auth/tls-crypt канала, например SHA256.",
+    description:
+      "Алгоритм HMAC (например SHA256). Сохраняется в настройках панели; в server.conf не записывается при шифрах AES-GCM в data-ciphers.",
     type: "text",
     placeholder: "SHA256",
   },

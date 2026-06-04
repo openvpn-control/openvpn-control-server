@@ -16,6 +16,14 @@ export const OPENVPN_CLIENT_SETTINGS_FIELDS: SettingsFieldMeta[] = [
     placeholder: "{{proto}}",
   },
   {
+    key: "data-ciphers-fallback",
+    label: "Data-ciphers-fallback",
+    description:
+      "Резервные шифры в .ovpn (OpenVPN 2.5+). Должны совпадать с server.conf, если не заданы в общих настройках сервера.",
+    type: "text",
+    placeholder: "AES-256-CBC:AES-128-CBC",
+  },
+  {
     key: "persist-key",
     label: "Persist-key",
     description: "Сохранять ключи при рестарте клиента.",

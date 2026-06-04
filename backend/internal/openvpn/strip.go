@@ -7,11 +7,12 @@ import (
 )
 
 var panelOnlyKeys = map[string]struct{}{
-	"remote":        {},
-	"resolv-retry":  {},
-	"nobind":        {},
-	"key-direction": {},
-	"client-verb":   {},
+	"remote":          {},
+	"resolv-retry":    {},
+	"nobind":          {},
+	"key-direction":   {},
+	"client-verb":     {},
+	"remote-cert-tls": {},
 }
 
 // materialPathKeys — пути к PEM на узле; файлы выкладывает sync, не сразу при POST openvpn-settings.
@@ -63,7 +64,19 @@ func StripEmptyManagedDirectiveValues(settings map[string]any) map[string]any {
 
 // PrepareAgentSettings — payload для POST /openvpn/settings на агенте.
 func PrepareAgentSettings(settings map[string]any) map[string]any {
-	return StripEmptyManagedDirectiveValues(StripPanelOnlySettings(settings))
+	out := StripEmptyManagedDirectiveValues(StripPanelOnlySettings(settings))
+	stripAuthIncompatibleWithDataCiphers(out)
+	return out
+}
+
+// stripAuthIncompatibleWithDataCiphers убирает auth из server.conf при AES-GCM (в БД значение сохраняем).
+func stripAuthIncompatibleWithDataCiphers(settings map[string]any) {
+	if settings == nil {
+		return
+	}
+	if !dataCiphersUseAuth(settingStr(settings, "data-ciphers")) {
+		delete(settings, "auth")
+	}
 }
 
 func isPanelMetadataOrMaterialPath(key string) bool {

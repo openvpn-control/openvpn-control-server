@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"regexp"
 	"strings"
@@ -34,9 +35,9 @@ func syncNodeOpenVPNInfo(ctx context.Context, pool *pgxpool.Pool, cfg config.Con
 	info, err := OpenVPNInfo(ctx, nodeFromInternal(n))
 	if err != nil {
 		msg := err.Error()
+		// Не сбрасываем openvpnRunning и systemd-состояние — иначе в UI «Not running» при устаревшем active/running.
 		_, _ = pool.Exec(ctx, `
-			UPDATE "AgentNode" SET "openvpnRunning" = false, "openvpnServiceRecentLogs" = '[]'::jsonb,
-				"openvpnLogsEnabled" = false, "openvpnLogsNote" = NULL, "openvpnInfoError" = $2
+			UPDATE "AgentNode" SET "openvpnInfoError" = $2, "openvpnInfoSeenAt" = NOW()
 			WHERE id = $1`, n.ID, msg)
 		return syncResult{Node: n.Name, OK: false, Error: msg}
 	}
@@ -49,6 +50,7 @@ func syncNodeOpenVPNInfo(ctx context.Context, pool *pgxpool.Pool, cfg config.Con
 	}
 
 	mainPid := sqlNullInt(info["mainPid"])
+	running := reconcileOpenVPNRunning(info)
 
 	_, err = pool.Exec(ctx, `
 		UPDATE "AgentNode" SET
@@ -79,7 +81,7 @@ func syncNodeOpenVPNInfo(ctx context.Context, pool *pgxpool.Pool, cfg config.Con
 		strPtr(info["configPath"]),
 		strPtr(info["serverLogPath"]),
 		strPtr(info["managementAddr"]),
-		boolVal(info["running"]),
+		running,
 		strPtr(info["serviceUnit"]),
 		strPtr(info["activeState"]),
 		strPtr(info["subState"]),
@@ -234,6 +236,23 @@ func boolVal(v any) bool {
 		return b
 	}
 	return false
+}
+
+func reconcileOpenVPNRunning(info map[string]any) bool {
+	if boolVal(info["running"]) {
+		return true
+	}
+	active := strings.EqualFold(strings.TrimSpace(strVal(info["activeState"])), "active")
+	sub := strings.ToLower(strings.TrimSpace(strVal(info["subState"])))
+	pid := int(num(info["mainPid"]))
+	return active && (pid > 0 || sub == "running" || sub == "started")
+}
+
+func strVal(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return strings.TrimSpace(fmt.Sprint(v))
 }
 
 func sqlNullInt(v any) *int {

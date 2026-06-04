@@ -21,7 +21,7 @@ func normalizeOptionalDirectives(settings map[string]any) {
 	if settings == nil {
 		return
 	}
-	for _, key := range []string{"remote-cert-tls", "verify-x509-name", "comp-lzo", "allow-compression"} {
+	for _, key := range []string{"verify-x509-name", "comp-lzo", "allow-compression"} {
 		if _, ok := settings[key]; ok && settingStr(settings, key) == "" {
 			delete(settings, key)
 		}

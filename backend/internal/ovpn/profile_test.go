@@ -23,6 +23,38 @@ func TestClientVerbFromSettings(t *testing.T) {
 	}
 }
 
+func TestBuildClientOvpnIncludesDataCiphersFallback(t *testing.T) {
+	ovpnText := BuildClientOvpn(BuildInput{
+		Node: Node{Host: "vpn.example.com"},
+		Settings: map[string]any{
+			"data-ciphers-fallback": "AES-256-CBC:AES-128-CBC",
+			"proto":                 "udp",
+			"port":                  float64(1194),
+		},
+	})
+	if !strings.Contains(ovpnText, "data-ciphers-fallback AES-256-CBC:AES-128-CBC") {
+		t.Fatalf("missing data-ciphers-fallback:\n%s", ovpnText)
+	}
+}
+
+func TestBuildClientOvpnIncludesPersistFlags(t *testing.T) {
+	ovpnText := BuildClientOvpn(BuildInput{
+		Node: Node{Host: "vpn.example.com"},
+		Settings: map[string]any{
+			"persist-key": true,
+			"persist-tun": true,
+			"proto":       "udp",
+			"port":        float64(1194),
+		},
+	})
+	if !strings.Contains(ovpnText, "persist-key") {
+		t.Fatalf("missing persist-key:\n%s", ovpnText)
+	}
+	if !strings.Contains(ovpnText, "persist-tun") {
+		t.Fatalf("missing persist-tun:\n%s", ovpnText)
+	}
+}
+
 func TestBuildClientOvpnUsesClientVerb(t *testing.T) {
 	ovpnText := BuildClientOvpn(BuildInput{
 		Node:     Node{Host: "vpn.example.com"},
