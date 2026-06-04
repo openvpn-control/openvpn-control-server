@@ -1,6 +1,7 @@
 package ovpn
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -65,11 +66,7 @@ func BuildClientOvpn(in BuildInput) string {
 	if in.TLSAuthPEM != "" {
 		lines = append(lines, "key-direction "+clientKeyDir)
 	}
-	verb := int(num(settings["client-verb"]))
-	if verb < 0 || verb > 11 {
-		verb = 3
-	}
-	lines = append(lines, fmt.Sprintf("verb %d", verb))
+	lines = append(lines, fmt.Sprintf("verb %d", clientVerbFromSettings(settings)))
 	lines = append(lines, "", "<ca>", strings.TrimSpace(in.RootCAPEM), "</ca>", "")
 	lines = append(lines, "<cert>", strings.TrimSpace(in.CertPEM), "</cert>", "")
 	lines = append(lines, "<key>", strings.TrimSpace(in.KeyPEM), "</key>")
@@ -88,13 +85,53 @@ func str(v any) string {
 }
 
 func num(v any) float64 {
+	n, ok := parseNumericSetting(v)
+	if !ok {
+		return 0
+	}
+	return n
+}
+
+// clientVerbFromSettings reads client-verb from panel DB (fallback: verb, then 3).
+func clientVerbFromSettings(settings map[string]any) int {
+	if settings == nil {
+		return 3
+	}
+	for _, key := range []string{"client-verb", "verb"} {
+		v, ok := settings[key]
+		if !ok || v == nil {
+			continue
+		}
+		n, ok := parseNumericSetting(v)
+		if !ok || n < 0 || n > 11 {
+			continue
+		}
+		return int(n)
+	}
+	return 3
+}
+
+func parseNumericSetting(v any) (float64, bool) {
 	switch t := v.(type) {
 	case float64:
-		return t
+		return t, true
+	case float32:
+		return float64(t), true
 	case int:
-		return float64(t)
+		return float64(t), true
+	case int64:
+		return float64(t), true
+	case json.Number:
+		f, err := t.Float64()
+		return f, err == nil
 	default:
-		return 0
+		s := strings.TrimSpace(fmt.Sprint(v))
+		if s == "" {
+			return 0, false
+		}
+		var f float64
+		_, err := fmt.Sscanf(s, "%f", &f)
+		return f, err == nil
 	}
 }
 

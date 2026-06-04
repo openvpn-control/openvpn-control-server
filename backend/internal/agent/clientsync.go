@@ -126,20 +126,19 @@ func SyncClientsSnapshot(ctx context.Context, pool *pgxpool.Pool, cfg config.Con
 			ksuid.New().String(), nodeID, sessionID, strVal(client["commonName"]), hostIP,
 			strVal(client["connectedAt"]), now)
 
-		if vip := strVal(client["virtualIp"]); vip != "" {
-			_, _ = pool.Exec(ctx, `
-				INSERT INTO "ClientIpAssignment" (id, "agentNodeId", "sessionId", "commonName", "realIp", "virtualIp", "connectedAt", "firstSeenAt", "lastSeenAt")
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
-				ON CONFLICT ("agentNodeId", "sessionId") DO UPDATE SET
-					"commonName" = EXCLUDED."commonName",
-					"realIp" = EXCLUDED."realIp",
-					"virtualIp" = EXCLUDED."virtualIp",
-					"connectedAt" = EXCLUDED."connectedAt",
-					"lastSeenAt" = EXCLUDED."lastSeenAt",
-					"endedAt" = NULL`,
-				ksuid.New().String(), nodeID, sessionID, strVal(client["commonName"]), hostIP, vip,
-				strVal(client["connectedAt"]), now)
-		}
+		vip := strVal(client["virtualIp"])
+		_, _ = pool.Exec(ctx, `
+			INSERT INTO "ClientIpAssignment" (id, "agentNodeId", "sessionId", "commonName", "realIp", "virtualIp", "connectedAt", "firstSeenAt", "lastSeenAt")
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+			ON CONFLICT ("agentNodeId", "sessionId") DO UPDATE SET
+				"commonName" = EXCLUDED."commonName",
+				"realIp" = EXCLUDED."realIp",
+				"virtualIp" = EXCLUDED."virtualIp",
+				"connectedAt" = EXCLUDED."connectedAt",
+				"lastSeenAt" = EXCLUDED."lastSeenAt",
+				"endedAt" = NULL`,
+			ksuid.New().String(), nodeID, sessionID, strVal(client["commonName"]), hostIP, vip,
+			strVal(client["connectedAt"]), now)
 	}
 
 	openRows, err := pool.Query(ctx, `

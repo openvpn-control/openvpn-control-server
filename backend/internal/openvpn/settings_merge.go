@@ -33,6 +33,11 @@ func MergeSettingsForDisplay(db, agent map[string]any) map[string]any {
 			out[k] = v
 		}
 	}
+	for k := range panelOnlyKeys {
+		if v, ok := db[k]; ok {
+			out[k] = v
+		}
+	}
 	return out
 }
 

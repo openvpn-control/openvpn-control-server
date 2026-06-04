@@ -31,7 +31,7 @@ func (h *Clients) List(w http.ResponseWriter, r *http.Request) {
 			c."agentNodeId", COALESCE(n.name, '')
 		FROM "ClientIpAssignment" c
 		LEFT JOIN "AgentNode" n ON n.id = c."agentNodeId"
-		WHERE c."lastSeenAt" >= $1 AND c."virtualIp" <> ''
+		WHERE c."endedAt" IS NULL AND c."lastSeenAt" >= $1
 		ORDER BY c."lastSeenAt" DESC`, cutoff)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())

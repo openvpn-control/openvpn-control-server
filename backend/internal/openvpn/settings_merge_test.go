@@ -20,6 +20,15 @@ func TestMergeSettingsForDisplayAgentWinsOverStaleDB(t *testing.T) {
 	}
 }
 
+func TestMergeSettingsForDisplayKeepsPanelClientVerbFromDB(t *testing.T) {
+	agent := map[string]any{"verb": float64(0)}
+	db := map[string]any{"client-verb": float64(3), "verb": float64(0)}
+	got := MergeSettingsForDisplay(db, agent)
+	if got["client-verb"] != float64(3) {
+		t.Fatalf("client-verb=%v", got["client-verb"])
+	}
+}
+
 func TestMergeSettingsForDisplayEmptyDBDoesNotWipeAgent(t *testing.T) {
 	agent := map[string]any{"tls-crypt": "/etc/openvpn/tc.key"}
 	db := map[string]any{"tls-crypt": ""}
