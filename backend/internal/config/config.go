@@ -59,7 +59,7 @@ func Load() Config {
 		AgentSyncInterval:           time.Duration(envInt("AGENT_SYNC_INTERVAL_MS", 2000)) * time.Millisecond,
 		OpenvpnInfoSyncInterval:     time.Duration(envInt("OPENVPN_INFO_SYNC_INTERVAL_MS", 5000)) * time.Millisecond,
 		ClientSyncInterval:          time.Duration(envInt("CLIENT_SYNC_INTERVAL_MS", 2000)) * time.Millisecond,
-		ClientSessionFreshness:      time.Duration(envInt("CLIENT_SESSION_FRESHNESS_SECONDS", 60)) * time.Second,
+		ClientSessionFreshness:      time.Duration(envInt("CLIENT_SESSION_FRESHNESS_SECONDS", 15)) * time.Second,
 		ClientTrafficHistoryMinutes: envInt("CLIENT_TRAFFIC_HISTORY_MINUTES", 15),
 		AgentMetricHistoryMinutes:   envInt("AGENT_METRIC_HISTORY_MINUTES", 15),
 		OpenvpnLogRetentionDays:     envInt("OPENVPN_LOG_RETENTION_DAYS", 10),
