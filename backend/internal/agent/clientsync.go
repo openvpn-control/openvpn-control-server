@@ -76,69 +76,20 @@ func SyncClientsSnapshot(ctx context.Context, pool *pgxpool.Pool, cfg config.Con
 	_, _ = pool.Exec(ctx, `DELETE FROM "ClientTrafficSample" WHERE "sampledAt" < $1`, trafficCutoff)
 
 	for _, client := range allClients {
-		nodeID, _ := client["nodeId"].(string)
-		sessionID, _ := client["id"].(string)
-		if nodeID == "" || sessionID == "" {
+		UpsertClientFromAgent(ctx, pool, client, now)
+	}
+
+	for _, row := range clientRows {
+		if !row.OK {
 			continue
 		}
-		hostIP := remoteAddrHostOnly(strVal(client["remoteIp"]))
-		rxBytes := bigIntVal(client["rxBytes"])
-		txBytes := bigIntVal(client["txBytes"])
-
-		var lastRx, lastTx int64
-		var lastAt time.Time
-		_ = pool.QueryRow(ctx, `
-			SELECT "rxBytes", "txBytes", "sampledAt"
-			FROM "ClientTrafficSample"
-			WHERE "agentNodeId" = $1 AND "sessionId" = $2
-			ORDER BY "sampledAt" DESC
-			LIMIT 1`, nodeID, sessionID).Scan(&lastRx, &lastTx, &lastAt)
-
-		inBps, outBps := 0.0, 0.0
-		if !lastAt.IsZero() {
-			seconds := now.Sub(lastAt).Seconds()
-			if seconds > 0 {
-				if d := float64(rxBytes - lastRx); d > 0 {
-					inBps = d / seconds
-				}
-				if d := float64(txBytes - lastTx); d > 0 {
-					outBps = d / seconds
-				}
+		ids := make([]string, 0, len(row.Clients))
+		for _, c := range row.Clients {
+			if id := strVal(c["id"]); id != "" {
+				ids = append(ids, id)
 			}
 		}
-
-		_, _ = pool.Exec(ctx, `
-			INSERT INTO "ClientTrafficSample" (id, "agentNodeId", "sessionId", "commonName", "virtualIp", "realIp",
-				"rxBytes", "txBytes", "inBps", "outBps", "sampledAt")
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-			ksuid.New().String(), nodeID, sessionID, strVal(client["commonName"]), strVal(client["virtualIp"]),
-			hostIP, rxBytes, txBytes, inBps, outBps, now)
-
-		_, _ = pool.Exec(ctx, `
-			INSERT INTO "ClientSourceIpHistory" (id, "agentNodeId", "sessionId", "commonName", "realIp", "connectedAt", "firstSeenAt", "lastSeenAt")
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
-			ON CONFLICT ("agentNodeId", "sessionId", "realIp") DO UPDATE SET
-				"commonName" = EXCLUDED."commonName",
-				"connectedAt" = EXCLUDED."connectedAt",
-				"lastSeenAt" = EXCLUDED."lastSeenAt",
-				"endedAt" = NULL,
-				"durationSeconds" = NULL`,
-			ksuid.New().String(), nodeID, sessionID, strVal(client["commonName"]), hostIP,
-			strVal(client["connectedAt"]), now)
-
-		vip := strVal(client["virtualIp"])
-		_, _ = pool.Exec(ctx, `
-			INSERT INTO "ClientIpAssignment" (id, "agentNodeId", "sessionId", "commonName", "realIp", "virtualIp", "connectedAt", "firstSeenAt", "lastSeenAt")
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
-			ON CONFLICT ("agentNodeId", "sessionId") DO UPDATE SET
-				"commonName" = EXCLUDED."commonName",
-				"realIp" = EXCLUDED."realIp",
-				"virtualIp" = EXCLUDED."virtualIp",
-				"connectedAt" = EXCLUDED."connectedAt",
-				"lastSeenAt" = EXCLUDED."lastSeenAt",
-				"endedAt" = NULL`,
-			ksuid.New().String(), nodeID, sessionID, strVal(client["commonName"]), hostIP, vip,
-			strVal(client["connectedAt"]), now)
+		CloseStaleAssignmentsForNode(ctx, pool, row.NodeID, ids, now)
 	}
 
 	openRows, err := pool.Query(ctx, `

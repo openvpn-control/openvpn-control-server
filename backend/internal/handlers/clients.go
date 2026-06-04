@@ -106,5 +106,6 @@ func (h *Clients) List(w http.ResponseWriter, r *http.Request) {
 			"trafficHistory": hist,
 		})
 	}
+	out = supplementLiveClients(ctx, h.Pool, cutoff, out)
 	httpx.WriteJSON(w, http.StatusOK, out)
 }

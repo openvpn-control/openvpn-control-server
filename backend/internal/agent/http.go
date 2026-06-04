@@ -185,21 +185,6 @@ func OpenvpnFileSha256(ctx context.Context, n Node, pathStr string) (map[string]
 	return RequestJSON(ctx, n, "/openvpn/file-sha256", http.MethodPost, map[string]string{"path": pathStr}, RequestOpts{Timeout: 30 * time.Second})
 }
 
-func ClientsList(ctx context.Context, n Node) ([]map[string]any, error) {
-	raw, err := requestRaw(ctx, n, "/clients", http.MethodGet, nil, defaultTimeout)
-	if err != nil {
-		return nil, err
-	}
-	var arr []map[string]any
-	if len(raw) == 0 {
-		return []map[string]any{}, nil
-	}
-	if err := json.Unmarshal(raw, &arr); err != nil {
-		return nil, fmt.Errorf("invalid JSON from agent %s", n.Name)
-	}
-	return arr, nil
-}
-
 func OpenVPNInfo(ctx context.Context, n Node) (map[string]any, error) {
 	return RequestJSON(ctx, n, "/openvpn/info", http.MethodGet, nil, RequestOpts{Timeout: 10 * time.Second})
 }
