@@ -34,8 +34,7 @@ func BuildClientOvpn(in BuildInput) string {
 		port = 1194
 	}
 	host := strings.TrimSpace(in.Node.Host)
-	keyDir := strings.ReplaceAll(str(settings["key-direction"]), "{{key_direction}}", parseTLSAuthDir(settings["tls-auth"]))
-	clientKeyDir := invertDir(keyDir)
+	clientKeyDir := clientKeyDirectionFromSettings(settings)
 	dev := normalizeDev(settings["dev"])
 	remoteTpl := str(settings["remote"])
 	if remoteTpl == "" {
@@ -67,6 +66,9 @@ func BuildClientOvpn(in BuildInput) string {
 	}
 	if v := str(settings["data-ciphers-fallback"]); v != "" {
 		lines = append(lines, "data-ciphers-fallback "+v)
+	}
+	if auth := str(settings["auth"]); auth != "" {
+		lines = append(lines, "auth "+auth)
 	}
 	lines = append(lines, "remote-cert-tls "+deriveRemoteCertTLS(settings["remote-cert-tls"]))
 	if in.TLSAuthPEM != "" {
@@ -175,13 +177,35 @@ func boolOr(v any, def bool) bool {
 	}
 }
 
+// clientKeyDirectionFromSettings — key-direction в настройках панели задаётся для клиентского .ovpn.
+// Пустое значение или {{key_direction}}: берём направление из tls-auth server.conf и инвертируем (0↔1).
+func clientKeyDirectionFromSettings(settings map[string]any) string {
+	if settings == nil {
+		return "1"
+	}
+	raw := str(settings["key-direction"])
+	if raw != "" && raw != "{{key_direction}}" {
+		return normalizeKeyDirection(raw)
+	}
+	return invertDir(parseTLSAuthDir(settings["tls-auth"]))
+}
+
+func normalizeKeyDirection(v string) string {
+	switch strings.TrimSpace(v) {
+	case "0", "1":
+		return strings.TrimSpace(v)
+	default:
+		return "1"
+	}
+}
+
 func parseTLSAuthDir(raw any) string {
 	text := str(raw)
 	parts := strings.Fields(text)
 	if len(parts) < 2 {
-		return "1"
+		return "0"
 	}
-	return parts[1]
+	return normalizeKeyDirection(parts[1])
 }
 
 func invertDir(v string) string {

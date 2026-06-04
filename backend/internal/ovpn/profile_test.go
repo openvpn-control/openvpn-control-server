@@ -55,6 +55,51 @@ func TestBuildClientOvpnIncludesPersistFlags(t *testing.T) {
 	}
 }
 
+func TestBuildClientOvpnUsesExplicitKeyDirection(t *testing.T) {
+	ovpnText := BuildClientOvpn(BuildInput{
+		Node:       Node{Host: "vpn.example.com"},
+		TLSAuthPEM: "static-key",
+		Settings: map[string]any{
+			"key-direction": "1",
+			"proto":         "udp",
+			"port":          float64(1194),
+		},
+	})
+	if !strings.Contains(ovpnText, "key-direction 1") {
+		t.Fatalf("expected key-direction 1, got:\n%s", ovpnText)
+	}
+}
+
+func TestBuildClientOvpnDerivesKeyDirectionFromServerTlsAuth(t *testing.T) {
+	ovpnText := BuildClientOvpn(BuildInput{
+		Node:       Node{Host: "vpn.example.com"},
+		TLSAuthPEM: "static-key",
+		Settings: map[string]any{
+			"tls-auth": "/etc/openvpn/ta.key 0",
+			"proto":    "udp",
+			"port":     float64(1194),
+		},
+	})
+	if !strings.Contains(ovpnText, "key-direction 1") {
+		t.Fatalf("server 0 should become client 1, got:\n%s", ovpnText)
+	}
+}
+
+func TestBuildClientOvpnIncludesAuthFromPanelSettings(t *testing.T) {
+	ovpnText := BuildClientOvpn(BuildInput{
+		Node: Node{Host: "vpn.example.com"},
+		Settings: map[string]any{
+			"data-ciphers": "AES-256-GCM:AES-128-GCM",
+			"auth":         "SHA256",
+			"proto":        "udp",
+			"port":         float64(1194),
+		},
+	})
+	if !strings.Contains(ovpnText, "auth SHA256") {
+		t.Fatalf("missing auth:\n%s", ovpnText)
+	}
+}
+
 func TestBuildClientOvpnUsesClientVerb(t *testing.T) {
 	ovpnText := BuildClientOvpn(BuildInput{
 		Node:     Node{Host: "vpn.example.com"},

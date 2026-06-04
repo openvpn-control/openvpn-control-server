@@ -32,6 +32,7 @@ const OPENVPN_SERVER_FORM_CLIENT_DIRECTIVES = new Set([
   "resolv-retry",
   "nobind",
   "key-direction",
+  "remote-cert-tls",
   "client-verb",
 ]);
 const OPENVPN_SERVER_FORM_SHARED_DIRECTIVES = new Set([
@@ -271,6 +272,17 @@ function fallbackRawFromClientSettings(settings, serverSettings) {
       continue;
     }
     lines.push(`${key} ${String(v)}`);
+  }
+  const s = serverSettings && typeof serverSettings === "object" && !Array.isArray(serverSettings) ? serverSettings : {};
+  for (const key of ["data-ciphers", "data-ciphers-fallback", "auth", "remote-cert-tls"]) {
+    if (serverDerivedKeys.has(key) || Object.prototype.hasOwnProperty.call(payload, key)) continue;
+    const v = String(s[key] ?? "").trim();
+    if (!v) continue;
+    if (key === "remote-cert-tls") {
+      lines.push(`${key} ${v === "client" ? "server" : v === "server" ? "client" : v || "server"}`);
+      continue;
+    }
+    lines.push(`${key} ${v}`);
   }
   lines.push("", "<ca>", "{{ca}}", "</ca>", "");
   lines.push("<cert>", "{{cert}}", "</cert>", "");

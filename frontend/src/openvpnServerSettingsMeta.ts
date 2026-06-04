@@ -54,9 +54,18 @@ export const OPENVPN_SERVER_SETTINGS_FIELDS: SettingsFieldMeta[] = [
   {
     key: "key-direction",
     label: "Key-direction (клиентский профиль)",
-    description: "Направление для tls-auth в клиентском .ovpn (0|1).",
+    description:
+      "Направление key-direction в клиентском .ovpn (0 или 1). Пусто или {{key_direction}} — вычисляется из tls-auth на сервере (инверсия 0↔1).",
     type: "text",
-    placeholder: "{{key_direction}}",
+    placeholder: "1",
+  },
+  {
+    key: "remote-cert-tls",
+    label: "Remote-cert-tls (клиентский профиль)",
+    description:
+      "Только для клиентского .ovpn (обычно server). В server.conf не записывается; сохраняется в настройках узла для генерации профилей.",
+    type: "text",
+    placeholder: "server",
   },
   {
     key: "topology",
