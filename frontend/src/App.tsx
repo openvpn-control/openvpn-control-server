@@ -2,6 +2,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { parseAppRoute, paths } from "./appRoutes";
+import {
+  applyPanelDataPatch,
+  fetchPanelDataKeys,
+  panelDataKeysForRoute,
+  panelDataRouteKey,
+  ALL_PANEL_DATA_KEYS,
+  PANEL_DATA_REFRESH,
+} from "./panelData";
 import { DocumentationPage } from "./DocumentationPage";
 import { OPENVPN_SERVER_SETTINGS_FIELDS } from "./openvpnServerSettingsMeta";
 import { OPENVPN_CLIENT_SETTINGS_FIELDS } from "./openvpnClientSettingsMeta";
@@ -2107,7 +2115,7 @@ export default function App() {
   const [userFirewallOverrideNatRules, setUserFirewallOverrideNatRules] = useState([]);
   const [userFirewallMode, setUserFirewallMode] = useState("merge");
   const [userFirewallBusy, setUserFirewallBusy] = useState(false);
-  /** Не перетирать черновик правил при каждом poll loadData() — только при смене выбранного пользователя. */
+  /** Не перетирать черновик правил при каждом poll refreshPanelData — только при смене выбранного пользователя. */
   const userFirewallHydratedForUserIdRef = useRef(null);
   const userCcdHydratedForUserIdRef = useRef(null);
   const [userCcdBusy, setUserCcdBusy] = useState(false);
@@ -3045,45 +3053,57 @@ export default function App() {
     });
   }, [userProfileSessions]);
 
-  const loadData = async () => {
-    if (!token) return;
-    try {
-      const [ov, ad, certs, cl, nd, hist, sourceHist, adminLogs, cas, orgs, vpn] = await Promise.all([
-        request("/api/monitoring/overview", "GET", token),
-        request("/api/admins", "GET", token),
-        request("/api/certificates", "GET", token),
-        request("/api/clients", "GET", token),
-        request("/api/agent/nodes", "GET", token),
-        request("/api/clients/history", "GET", token),
-        request("/api/clients/source-history", "GET", token),
-        request("/api/monitoring/admin-actions?limit=300", "GET", token),
-        request("/api/certificates/root-ca", "GET", token),
-        request("/api/organizations", "GET", token),
-        request("/api/vpn-users", "GET", token),
-      ]);
-      setOverview(ov);
-      setAdmins(ad);
-      setCertificates(certs);
-      setClients(cl);
-      setNodes(nd);
-      setIpHistory(hist);
-      setSourceIpHistory(sourceHist);
-      setAdminActionLogs(adminLogs);
-      setRootCAs(cas);
-      setOrganizations(orgs);
-      setVpnUsers(vpn);
-      setError("");
-    } catch (e) {
-      setError(e.message);
-    }
-  };
+  const panelDataSetters = useMemo(
+    () => ({
+      setOverview,
+      setAdmins,
+      setCertificates,
+      setClients,
+      setNodes,
+      setIpHistory,
+      setSourceIpHistory,
+      setAdminActionLogs,
+      setRootCAs,
+      setOrganizations,
+      setVpnUsers,
+    }),
+    [],
+  );
+
+  const refreshPanelData = useCallback(
+    async (keys) => {
+      if (!token) return;
+      const toFetch = keys ?? panelDataKeysForRoute(route);
+      if (!toFetch.length) return;
+      try {
+        const patch = await fetchPanelDataKeys(request, token, toFetch);
+        applyPanelDataPatch(patch, panelDataSetters);
+        setError("");
+      } catch (e) {
+        setError(e.message);
+      }
+    },
+    [token, route, panelDataSetters],
+  );
+
+  /** Обновить данные панели: без аргументов — только для текущей страницы; с аргументом — после мутации. */
+  const loadData = useCallback(
+    async (afterMutationKeys) => {
+      const routeKeys = panelDataKeysForRoute(route);
+      const keys = afterMutationKeys?.length
+        ? [...new Set([...routeKeys, ...afterMutationKeys])]
+        : routeKeys;
+      await refreshPanelData(keys);
+    },
+    [route, refreshPanelData],
+  );
 
   const patchAdminIsActive = async (adminId, isActive) => {
     setAdminDetailStatusBusy(true);
     setAdminDetailStatusError("");
     try {
       await request(`/api/admins/${encodeURIComponent(adminId)}`, "PATCH", token, { isActive });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.admins);
     } catch (e) {
       setAdminDetailStatusError(e?.message ? String(e.message) : String(e));
     } finally {
@@ -3120,7 +3140,7 @@ export default function App() {
     setAdminBlockModal((prev) => ({ ...prev, validationError: "", error: "", busy: true }));
     try {
       await request(`/api/admins/${encodeURIComponent(m.adminId)}`, "PATCH", token, { isActive: false });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.admins);
       closeAdminBlockModal();
     } catch (e) {
       setAdminBlockModal((prev) => ({
@@ -3142,7 +3162,7 @@ export default function App() {
         username: adminProfileDraft.username.trim(),
         email: adminProfileDraft.email.trim(),
       });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.admins);
     } catch (err) {
       setAdminProfileFieldError(err?.message ? String(err.message) : String(err));
     } finally {
@@ -3412,7 +3432,7 @@ export default function App() {
       setRestoreMessage(typeof body.message === "string" ? body.message : "Готово.");
       setRestoreFile(null);
       setRestoreConfirm(false);
-      await loadData();
+      await loadData(ALL_PANEL_DATA_KEYS);
     } catch (e) {
       setError(e.message || String(e));
     } finally {
@@ -3648,7 +3668,7 @@ export default function App() {
           openvpnCertPathsPartial(serverOpenVpnSettings, { panelServerCertId: created.id }),
         );
       }
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       setSrvCertCreateModal({
         open: false,
         cn: "",
@@ -3689,7 +3709,7 @@ export default function App() {
         agentNodeId: nodeId,
         expiresAt,
       });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       setServerCaIssueModal({
         open: false,
         commonName: "",
@@ -3725,7 +3745,7 @@ export default function App() {
         certPem,
         keyPem,
       });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       setServerCaImportModal({
         open: false,
         certPem: "",
@@ -3751,7 +3771,7 @@ export default function App() {
       await persistOpenVpnPanelPartial(
         openvpnCertPathsPartial(serverOpenVpnSettings, { panelRootCaId: rid, panelServerCertId: "" }),
       );
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
     } catch (err) {
       setError(err?.message || String(err));
     } finally {
@@ -3775,7 +3795,7 @@ export default function App() {
         issuedList,
         agentNodeId: nodeId,
       });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       setServerCaIndexImportModal({
         open: false,
         indexText: "",
@@ -3823,7 +3843,7 @@ export default function App() {
           openvpnCertPathsPartial(serverOpenVpnSettings, { panelServerCertId: created.id }),
         );
       }
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       setSrvCertImportModal({ open: false, certPem: "", keyPem: "", busy: false, error: "" });
     } catch (e) {
       setSrvCertImportModal((prev) => ({
@@ -3843,7 +3863,7 @@ export default function App() {
         "DELETE",
         tokenRef.current,
       );
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       setServerServerCertDeleteModal({ open: false, busy: false, error: "" });
     } catch (e) {
       setServerServerCertDeleteModal((prev) => ({
@@ -3870,7 +3890,7 @@ export default function App() {
       if (String(serverOpenVpnSettings.panelTlsAuthMaterialId || "") === String(mid))
         partial.panelTlsAuthMaterialId = "";
       if (Object.keys(partial).length) await persistOpenVpnPanelPartial(partial);
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       setOpenvpnMaterialDeleteModal({ open: false, id: null, kindLabel: "", busy: false, error: "" });
     } catch (err) {
       setOpenvpnMaterialDeleteModal((prev) => ({
@@ -3900,7 +3920,7 @@ export default function App() {
         `Команда "${serviceActionModal.action}" выполнена${data?.output ? `: ${data.output}` : "."}`,
       );
       setServiceActionModal({ open: false, action: "", busy: false, error: "" });
-      loadData();
+      loadData(PANEL_DATA_REFRESH.servers);
     } catch (err) {
       const details = typeof err.output === "string" && err.output ? `\n${err.output}` : "";
       setServiceActionModal((prev) => ({
@@ -4044,7 +4064,7 @@ export default function App() {
       setAgentUpdateFileName("");
       setAgentUpdateSha256("");
       setAgentUpdateBinaryBase64("");
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.servers);
     } catch (err) {
       setAgentUpdateUploadPct(0);
       const extra = typeof err.output === "string" && err.output ? `: ${err.output}` : "";
@@ -4096,7 +4116,7 @@ export default function App() {
         busy: false,
         error: "",
       });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.clients);
       const uid = selectedUserId;
       if (uid && tokenRef.current) {
         const rows = await request(
@@ -4200,8 +4220,16 @@ export default function App() {
   }, [selectedServerId, serverOpenVpnSettings]);
 
   useEffect(() => {
-    loadData();
-  }, [token]);
+    if (!token) return undefined;
+    const keys = panelDataKeysForRoute(route);
+    if (!keys.length) return undefined;
+    const tick = () => {
+      void refreshPanelData(keys);
+    };
+    tick();
+    const timer = setInterval(tick, 1500);
+    return () => clearInterval(timer);
+  }, [token, panelDataRouteKey(route), refreshPanelData]);
 
   useEffect(() => {
     setAgentUpdateFileName("");
@@ -4989,14 +5017,6 @@ export default function App() {
   }, [userConnectionProfileDraft.certificateId]);
 
   useEffect(() => {
-    if (!token) return undefined;
-    const timer = setInterval(() => {
-      loadData();
-    }, 1500);
-    return () => clearInterval(timer);
-  }, [token]);
-
-  useEffect(() => {
     if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
     else localStorage.removeItem(TOKEN_STORAGE_KEY);
   }, [token]);
@@ -5150,7 +5170,7 @@ export default function App() {
       const inviteUrl = invitePath ? `${window.location.origin}${invitePath}` : "";
       setAddAdminInviteResult(inviteUrl ? { inviteUrl, invitePath } : null);
       setNewAdmin({ fullName: "", username: "", email: "" });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.admins);
     } catch (err) {
       setAddAdminError(err.message || String(err));
     } finally {
@@ -5165,7 +5185,7 @@ export default function App() {
     try {
       await request(`/api/certificates/${id}/revoke`, "POST", token, { reason: "manual revoke" });
       setUserCertRevokeModal({ open: false, certId: null, commonName: "", busy: false, error: "" });
-      loadData();
+      loadData(PANEL_DATA_REFRESH.certificates);
     } catch (e) {
       setUserCertRevokeModal((m) => ({
         ...m,
@@ -5182,7 +5202,7 @@ export default function App() {
     try {
       await request(`/api/certificates/${id}`, "PATCH", token, { vpnUserId: null });
       setUserCertUnlinkModal({ open: false, certId: null, commonName: "", busy: false, error: "" });
-      loadData();
+      loadData(PANEL_DATA_REFRESH.certificates);
     } catch (e) {
       setUserCertUnlinkModal((m) => ({
         ...m,
@@ -5204,7 +5224,7 @@ export default function App() {
         keySize: "4096",
         signatureAlgorithm: "sha256",
       });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       if (created?.id) {
         navigate(paths.caRoot(created.id, "overview"));
       } else {
@@ -5256,7 +5276,7 @@ export default function App() {
         issuedListText: "",
         revokedListText: "",
       });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       if (result?.id) {
         navigate(paths.caRoot(result.id, "overview"));
       } else {
@@ -5294,7 +5314,7 @@ export default function App() {
           openvpnCertPathsPartial(serverOpenVpnSettings, { panelRootCaId: created.id, panelServerCertId: "" }),
         );
       }
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       setServerRootCaCreateModalOpen(false);
     } catch (err) {
       setError(err?.message || String(err));
@@ -5323,7 +5343,7 @@ export default function App() {
           openvpnCertPathsPartial(serverOpenVpnSettings, { panelRootCaId: created.id, panelServerCertId: "" }),
         );
       }
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       setServerRootCaImportModalOpen(false);
     } catch (err) {
       setError(err?.message || String(err));
@@ -5361,7 +5381,7 @@ export default function App() {
       );
       setServerRootCaSummary({ loading: false, data: null });
       setServerRootCaDeleteModal({ open: false, step: 1, confirmCommonName: "", busy: false, error: "" });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       try {
         const refreshed = await request(
           `/api/panel/nodes/${encodeURIComponent(selectedServerId)}/openvpn-settings`,
@@ -5574,7 +5594,7 @@ export default function App() {
       setNewUserCertChoice("");
       setNewUserCertNewCn("");
       setNewUserCertValidityDays("1825");
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.vpnUsers);
       if (created?.id) {
         navigate(paths.userProfile(created.id, "overview"));
       } else {
@@ -5598,7 +5618,7 @@ export default function App() {
         organizationId: userProfileDraft.organizationId?.trim() || null,
         notes: userProfileDraft.notes?.trim() || null,
       });
-      loadData();
+      loadData(PANEL_DATA_REFRESH.vpnUsers);
     } catch (err) {
       setError(err.message);
     }
@@ -5653,7 +5673,6 @@ export default function App() {
       const natRules = Array.isArray(data?.natRules) ? data.natRules : [];
       setUserFirewallOverrideRules(rules);
       setUserFirewallOverrideNatRules(natRules);
-      await loadData();
     } catch (err) {
       setError(err.message || "Не удалось сохранить правила пользователя");
     } finally {
@@ -5673,7 +5692,6 @@ export default function App() {
       setOrganizationFirewallMode(String(data?.mode || "merge").toLowerCase() === "replace" ? "replace" : "merge");
       setOrganizationFirewallRules(Array.isArray(data?.rules) ? data.rules : []);
       setOrganizationFirewallNatRules(Array.isArray(data?.natRules) ? data.natRules : []);
-      await loadData();
     } catch (err) {
       setError(err.message || "Не удалось сохранить правила организации");
     } finally {
@@ -5688,7 +5706,6 @@ export default function App() {
       setUserCcdResult("");
       const data = await request(`/api/vpn-users/${encodeURIComponent(selectedUserId)}/ccd`, "POST", tokenRef.current, userCcdDraft);
       setUserCcdResult(String(data?.message || "CCD сохранён."));
-      await loadData();
     } catch (err) {
       setError(err.message || "Не удалось сохранить CCD");
     } finally {
@@ -5896,7 +5913,7 @@ export default function App() {
     if (selectedRootCaId) {
       navigate(paths.caRoot(selectedRootCaId, "user-certs"));
     }
-    loadData();
+    loadData(PANEL_DATA_REFRESH.certificates);
   };
 
   const issueProfileCertificate = async (e) => {
@@ -5944,7 +5961,7 @@ export default function App() {
         validityDays: String(Math.min(1825, maxDays)),
       }));
       setUserCertIssueModalOpen(false);
-      loadData();
+      loadData(PANEL_DATA_REFRESH.certificates);
     } catch (err) {
       setError(err.message || "Не удалось выпустить сертификат");
     }
@@ -6061,7 +6078,7 @@ export default function App() {
 
   const patchCertificate = async (certId, patch) => {
     await request(`/api/certificates/${certId}`, "PATCH", token, patch);
-    loadData();
+    loadData(PANEL_DATA_REFRESH.certificates);
   };
 
   const confirmUserCertBind = async () => {
@@ -6074,7 +6091,7 @@ export default function App() {
         vpnUserId: selectedUserId,
         agentNodeId: userCertBindServerId,
       });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.certificates);
       setUserCertBindModalOpen(false);
       setUserCertBindSelectedCertId("");
     } catch (err) {
@@ -6168,7 +6185,7 @@ export default function App() {
       setError("");
       const agent = await request("/api/agent/nodes", "POST", token, { ...newNode, port: Number(newNode.port) });
       setNewNode({ name: "", protocol: "http", host: "", port: "9443", authToken: "" });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.servers);
       if (agent?.id) {
         navigate(paths.serverDetail(agent.id, "service"));
       } else {
@@ -6195,7 +6212,7 @@ export default function App() {
       }
       await request(`/api/agent/nodes/${encodeURIComponent(selectedServerId)}`, "PATCH", token, body);
       setServerAgentDraft((prev) => ({ ...prev, authToken: "" }));
-      loadData();
+      loadData(PANEL_DATA_REFRESH.servers);
     } catch (err) {
       setError(err.message || String(err));
     }
@@ -6247,7 +6264,7 @@ export default function App() {
         phone: "",
         email: "",
       });
-      await loadData();
+      await loadData(PANEL_DATA_REFRESH.organizations);
       if (created?.id) {
         navigate(paths.organizationEdit(created.id));
       } else {
@@ -6279,7 +6296,7 @@ export default function App() {
         email: editOrganization.email || null,
       });
       goOrganizationsList();
-      loadData();
+      loadData(PANEL_DATA_REFRESH.organizations);
     } catch (err) {
       setError(err.message);
     }
@@ -13369,7 +13386,7 @@ export default function App() {
                           await persistOpenVpnPanelPartial(partial);
                         }
                         await refreshServerNodeOpenvpnMaterials(selectedServerId);
-                        await loadData();
+                        await loadData(PANEL_DATA_REFRESH.certificates);
                         setServerKeyMaterialModal({ mode: null, kind: null, busy: false, error: "", importPem: "" });
                       } catch (err) {
                         setServerKeyMaterialModal((prev) => ({
@@ -13469,7 +13486,7 @@ export default function App() {
                           await persistOpenVpnPanelPartial(partial);
                         }
                         await refreshServerNodeOpenvpnMaterials(selectedServerId);
-                        await loadData();
+                        await loadData(PANEL_DATA_REFRESH.certificates);
                         setServerKeyMaterialModal({ mode: null, kind: null, busy: false, error: "", importPem: "" });
                       } catch (err) {
                         setServerKeyMaterialModal((prev) => ({

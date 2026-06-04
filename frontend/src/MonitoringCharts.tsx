@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
-import { monitoringWindowMs, parseUtcMs } from "./monitoringTime";
+import { monitoringXRange, parseUtcMs } from "./monitoringTime";
 
 const LEFT_AXIS_PX = 40;
 
@@ -31,21 +31,29 @@ function fmtRate(v) {
   return `${(n / (1000 * 1000 * 1000)).toFixed(1)} Gbps`;
 }
 
-function toChartSeries(samples, seriesGetters) {
+function toChartSeries(samples, seriesGetters, historyMinutes) {
+  const [xMin] = monitoringXRange(historyMinutes);
   const rows = [...(samples || [])]
     .map((s) => ({ ...s, ts: parseUtcMs(s.createdAt) }))
-    .filter((s) => Number.isFinite(s.ts))
+    .filter((s) => Number.isFinite(s.ts) && s.ts >= xMin)
     .sort((a, b) => a.ts - b.ts);
   const x = rows.map((r) => r.ts);
   const ys = seriesGetters.map((g) => rows.map((r) => Number(g(r) || 0)));
   return { rows, data: [x, ...ys] };
 }
 
-function useUplot(containerRef, optionsFactory, data, onCursor) {
+function syncMonitoringXScale(plot, historyMinutes) {
+  const [xMin, xMax] = monitoringXRange(historyMinutes);
+  plot.setScale("x", { min: xMin, max: xMax });
+}
+
+function useUplot(containerRef, optionsFactory, data, onCursor, historyMinutes = 15) {
   const plotRef = useRef(null);
   const rootRef = useRef(null);
   const optionsFactoryRef = useRef(optionsFactory);
   const onCursorRef = useRef(onCursor);
+  const dataRef = useRef(data);
+  const historyMinutesRef = useRef(historyMinutes);
 
   useEffect(() => {
     optionsFactoryRef.current = optionsFactory;
@@ -56,21 +64,38 @@ function useUplot(containerRef, optionsFactory, data, onCursor) {
   }, [onCursor]);
 
   useEffect(() => {
+    dataRef.current = data;
+    historyMinutesRef.current = historyMinutes;
+    if (!plotRef.current) return;
+    plotRef.current.setData(data);
+    syncMonitoringXScale(plotRef.current, historyMinutes);
+    plotRef.current.redraw();
+  }, [data, historyMinutes]);
+
+  useEffect(() => {
     if (!containerRef.current) return undefined;
     const root = containerRef.current;
     rootRef.current = root;
-    const build = () => {
-      const w = Math.max(1, root.clientWidth);
-      const opts = optionsFactoryRef.current(w);
-      plotRef.current = new uPlot(opts, data, root);
+    const w = Math.max(1, root.clientWidth);
+    const opts = optionsFactoryRef.current(w);
+    plotRef.current = new uPlot(opts, dataRef.current, root);
+    syncMonitoringXScale(plotRef.current, historyMinutesRef.current);
+
+    const slideAxis = () => {
+      if (!plotRef.current) return;
+      syncMonitoringXScale(plotRef.current, historyMinutesRef.current);
+      plotRef.current.redraw();
     };
-    build();
+    const axisTimer = window.setInterval(slideAxis, 1000);
+
     const ro = new ResizeObserver(() => {
       if (!plotRef.current || !rootRef.current) return;
       plotRef.current.setSize({ width: Math.max(1, rootRef.current.clientWidth), height: 210 });
+      slideAxis();
     });
     ro.observe(root);
     return () => {
+      window.clearInterval(axisTimer);
       ro.disconnect();
       if (plotRef.current) {
         plotRef.current.destroy();
@@ -79,10 +104,6 @@ function useUplot(containerRef, optionsFactory, data, onCursor) {
       onCursorRef.current?.(null);
     };
   }, [containerRef]);
-
-  useEffect(() => {
-    if (plotRef.current) plotRef.current.setData(data);
-  }, [data]);
 
   return plotRef;
 }
@@ -105,21 +126,13 @@ interface ChartPanelProps {
   historyMinutes?: number;
 }
 
-function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel, legendRows, historyMinutes }: ChartPanelProps) {
+function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel, legendRows, historyMinutes = 15 }: ChartPanelProps) {
   const holderRef = useRef(null);
   const [hover, setHover] = useState(null);
-  const chart = useMemo(() => toChartSeries(samples, series.map((s) => s.getter)), [samples, series]);
-
-  const [axisTick, setAxisTick] = useState(0);
-  useEffect(() => {
-    const id = window.setInterval(() => setAxisTick((n) => n + 1), 15000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  const xRange = useMemo(() => {
-    const xMax = Date.now();
-    return [xMax - monitoringWindowMs(historyMinutes), xMax];
-  }, [historyMinutes, axisTick, chart.data]);
+  const chart = useMemo(
+    () => toChartSeries(samples, series.map((s) => s.getter), historyMinutes),
+    [samples, series, historyMinutes],
+  );
 
   const optionsFactory = useMemo(
     () => (width) => ({
@@ -128,7 +141,10 @@ function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel,
       class: "grafana-like",
       padding: [12, 10, 18, LEFT_AXIS_PX],
       scales: {
-        x: { time: false, range: xRange },
+        x: {
+          time: false,
+          range: () => monitoringXRange(historyMinutes),
+        },
         y: { auto: false, range: [0, yMax] },
       },
       axes: [
@@ -186,17 +202,16 @@ function ChartPanel({ title, yMax, yTicks, yFormat, series, samples, limitLabel,
         ],
       },
     }),
-    [series, yFormat, yMax, yTicks, xRange],
+    [series, yFormat, yMax, yTicks, historyMinutes],
   );
 
-  const plotRef = useUplot(holderRef, optionsFactory, chart.data, setHover);
+  const plotRef = useUplot(holderRef, optionsFactory, chart.data, setHover, historyMinutes);
+
   useEffect(() => {
-    if (!plotRef.current) return;
-    if (Number.isFinite(yMax)) {
-      plotRef.current.setScale("y", { min: 0, max: yMax });
-    }
-    plotRef.current.setScale("x", { min: xRange[0], max: xRange[1] });
-  }, [plotRef, yMax, xRange]);
+    if (!plotRef.current || !Number.isFinite(yMax)) return;
+    plotRef.current.setScale("y", { min: 0, max: yMax });
+    plotRef.current.redraw();
+  }, [plotRef, yMax, chart.data]);
 
   return (
     <div className="server-monitoring-panel">

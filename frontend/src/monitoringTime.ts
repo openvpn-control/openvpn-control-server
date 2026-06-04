@@ -17,3 +17,9 @@ export function monitoringWindowMs(historyMinutes = 15): number {
   const mins = Number.isFinite(m) && m > 0 ? m : 15;
   return mins * 60 * 1000;
 }
+
+/** Скользящее окно «последние N минут» для оси X uPlot (пересчитывается при каждой отрисовке). */
+export function monitoringXRange(historyMinutes = 15): [number, number] {
+  const xMax = Date.now();
+  return [xMax - monitoringWindowMs(historyMinutes), xMax];
+}
