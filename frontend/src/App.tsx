@@ -104,6 +104,24 @@ function buildOpenVpnPayloadForAgent(stateObj) {
 /** Сохранение на панели: директивы для агента + служебные поля панели. */
 function buildOpenVpnSettingsForPanelSave(stateObj) {
   const base = buildOpenVpnPayloadForAgent(stateObj);
+  for (const f of OPENVPN_SERVER_SETTINGS_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(stateObj, f.key)) continue;
+    if (f.type === "number") {
+      const raw = stateObj[f.key];
+      if (raw === "" || raw === undefined || raw === null) {
+        base[f.key] = "";
+        continue;
+      }
+      const n = Number(raw);
+      base[f.key] = Number.isFinite(n) ? n : "";
+      continue;
+    }
+    if (f.type === "select") {
+      const raw = stateObj[f.key];
+      base[f.key] =
+        raw === undefined || raw === null || raw === "" ? "" : String(raw).trim();
+    }
+  }
   for (const pk of PANEL_SAVE_EXTRA_KEYS) {
     if (Object.prototype.hasOwnProperty.call(stateObj, pk)) {
       const v = stateObj[pk];

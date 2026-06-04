@@ -29,6 +29,9 @@ func MergeSettingsForDisplay(db, agent map[string]any) map[string]any {
 		if settingValueIsEmpty(v) {
 			continue
 		}
+		if staleZeroFragmentFromDB(k, v, agent) {
+			continue
+		}
 		if settingValueIsEmpty(out[k]) {
 			out[k] = v
 		}
@@ -39,6 +42,39 @@ func MergeSettingsForDisplay(db, agent map[string]any) map[string]any {
 		}
 	}
 	return out
+}
+
+// staleZeroFragmentFromDB: в БД остался fragment 0, в server.conf директивы нет — не подставляем в форму.
+func staleZeroFragmentFromDB(key string, dbVal any, agent map[string]any) bool {
+	if key != "fragment" {
+		return false
+	}
+	if _, ok := agent["fragment"]; ok {
+		return false
+	}
+	n, ok := numericSettingValue(dbVal)
+	return ok && n == 0
+}
+
+func numericSettingValue(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	default:
+		s := strings.TrimSpace(fmt.Sprint(v))
+		if s == "" {
+			return 0, false
+		}
+		var f float64
+		_, err := fmt.Sscanf(s, "%f", &f)
+		return f, err == nil
+	}
 }
 
 func settingValueIsEmpty(v any) bool {

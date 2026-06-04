@@ -20,6 +20,33 @@ func TestMergeSettingsForDisplayAgentWinsOverStaleDB(t *testing.T) {
 	}
 }
 
+func TestMergeSettingsForDisplayFillsRemoteCertTlsFromDBWhenMissingOnAgent(t *testing.T) {
+	agent := map[string]any{"port": float64(1194)}
+	db := map[string]any{"port": float64(1194), "remote-cert-tls": "client"}
+	got := MergeSettingsForDisplay(db, agent)
+	if got["remote-cert-tls"] != "client" {
+		t.Fatalf("remote-cert-tls=%v", got["remote-cert-tls"])
+	}
+}
+
+func TestMergeSettingsForDisplayPrefersAgentRemoteCertTlsOverDB(t *testing.T) {
+	agent := map[string]any{"port": float64(1194), "remote-cert-tls": "client"}
+	db := map[string]any{"port": float64(1194), "remote-cert-tls": "server"}
+	got := MergeSettingsForDisplay(db, agent)
+	if got["remote-cert-tls"] != "client" {
+		t.Fatalf("remote-cert-tls=%v", got["remote-cert-tls"])
+	}
+}
+
+func TestMergeSettingsForDisplayIgnoresStaleFragmentZeroInDB(t *testing.T) {
+	agent := map[string]any{"port": float64(1194)}
+	db := map[string]any{"port": float64(1194), "fragment": float64(0)}
+	got := MergeSettingsForDisplay(db, agent)
+	if _, ok := got["fragment"]; ok {
+		t.Fatalf("stale fragment 0 should not appear, got %v", got["fragment"])
+	}
+}
+
 func TestMergeSettingsForDisplayKeepsPanelClientVerbFromDB(t *testing.T) {
 	agent := map[string]any{"verb": float64(0)}
 	db := map[string]any{"client-verb": float64(3), "verb": float64(0)}

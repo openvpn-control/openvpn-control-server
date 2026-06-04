@@ -14,13 +14,27 @@ func NormalizeServerSettings(settings map[string]any) {
 	EnsureServerCryptoDefaults(settings)
 	normalizeManagementSetting(settings)
 	normalizeTunnelSetting(settings)
+	normalizeOptionalDirectives(settings)
+}
+
+func normalizeOptionalDirectives(settings map[string]any) {
+	if settings == nil {
+		return
+	}
+	for _, key := range []string{"remote-cert-tls", "verify-x509-name", "comp-lzo", "allow-compression"} {
+		if _, ok := settings[key]; ok && settingStr(settings, key) == "" {
+			delete(settings, key)
+		}
+	}
 }
 
 func normalizeTunnelSetting(settings map[string]any) {
 	if settings == nil {
 		return
 	}
-	// fragment 0 храним в БД (отключено); в server.conf не пишется на агенте при сборке/apply.
+	if _, ok := settings["fragment"]; ok && settingStr(settings, "fragment") == "" {
+		delete(settings, "fragment")
+	}
 	if settingStr(settings, "user") == "" {
 		delete(settings, "user")
 	}

@@ -181,8 +181,9 @@ func PostOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeID
 	}
 	merged := mergeSettings(prev, incoming)
 	ensureOpenvpnSettingsReady(merged)
-	if !openvpn.AgentSettingsEqual(prev, merged) {
-		if _, err := agent.PostOpenVPNSettings(ctx, an, openvpn.StripPanelOnlySettings(merged)); err != nil {
+	panelOnly := openvpn.OnlyPanelMetadataAndMaterialPathsChanged(prev, merged)
+	if !panelOnly && !openvpn.AgentSettingsEqual(prev, merged) {
+		if _, err := agent.PostOpenVPNSettings(ctx, an, openvpn.PrepareAgentSettings(merged)); err != nil {
 			return mapAgentError(err)
 		}
 	}
@@ -305,6 +306,12 @@ func ApplyOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeI
 	}
 	settings := mergeSettings(prev, incoming)
 	ensureOpenvpnSettingsReady(settings)
+	if agentData, err := agent.GetOpenVPNSettings(ctx, an); err == nil {
+		if snap, ok := agentData["settings"].(map[string]any); ok {
+			settings = openvpn.MergeSettingsForDisplay(settings, snap)
+			ensureOpenvpnSettingsReady(settings)
+		}
+	}
 	configPath := agentBodyString(applyData, "configPath")
 	var cp *string
 	if configPath != "" {
@@ -573,7 +580,7 @@ func PostOpenvpnCheckConfigForPanel(ctx context.Context, pool *pgxpool.Pool, nod
 	}
 	settings := mergeSettings(prev, incoming)
 	ensureOpenvpnSettingsReady(settings)
-	payload := openvpn.StripPanelOnlySettings(settings)
+	payload := openvpn.PrepareAgentSettings(settings)
 	data, err := agent.PostOpenVPNCheckConfig(ctx, an, payload)
 	if err != nil {
 		status := http.StatusBadGateway
