@@ -124,34 +124,30 @@ func SyncClientsSnapshot(ctx context.Context, pool *pgxpool.Pool, cfg config.Con
 	sourceRetention := now.Add(-90 * 24 * time.Hour)
 	_, _ = pool.Exec(ctx, `DELETE FROM "ClientSourceIpHistory" WHERE "endedAt" IS NOT NULL AND "endedAt" < $1`, sourceRetention)
 
-	activeCN := map[string]struct{}{}
+	activeCNLower := map[string]struct{}{}
 	for _, client := range allClients {
-		if cn := strings.TrimSpace(strVal(client["commonName"])); cn != "" {
-			activeCN[cn] = struct{}{}
+		if cn := strings.ToLower(strings.TrimSpace(strVal(client["commonName"]))); cn != "" {
+			activeCNLower[cn] = struct{}{}
 		}
 	}
-	if len(activeCN) > 0 {
-		cns := make([]string, 0, len(activeCN))
-		for cn := range activeCN {
+	if len(activeCNLower) > 0 {
+		cns := make([]string, 0, len(activeCNLower))
+		for cn := range activeCNLower {
 			cns = append(cns, cn)
 		}
-		userRows, err := pool.Query(ctx, `
-			SELECT DISTINCT "vpnUserId" FROM "Certificate"
-			WHERE "commonName" = ANY($1) AND "vpnUserId" IS NOT NULL`, cns)
-		if err == nil {
-			defer userRows.Close()
-			var userIDs []string
-			for userRows.Next() {
-				var uid string
-				if userRows.Scan(&uid) == nil && uid != "" {
-					userIDs = append(userIDs, uid)
-				}
-			}
-			if len(userIDs) > 0 {
-				_, _ = pool.Exec(ctx, `
-					UPDATE "VpnUser" SET "lastVpnActivityAt" = $2 WHERE id = ANY($1)`, userIDs, now)
-			}
-		}
+		_, _ = pool.Exec(ctx, `
+			UPDATE "VpnUser" SET "lastVpnActivityAt" = NULL
+			WHERE "lastVpnActivityAt" IS NOT NULL
+			AND id NOT IN (
+				SELECT DISTINCT c."vpnUserId" FROM "Certificate" c
+				WHERE c."vpnUserId" IS NOT NULL
+				AND LOWER(TRIM(c."commonName")) = ANY($1)
+			)`, cns)
+		_, _ = pool.Exec(ctx, `
+			UPDATE "VpnUser" u SET "lastVpnActivityAt" = $2
+			FROM "Certificate" c
+			WHERE u.id = c."vpnUserId"
+			AND LOWER(TRIM(c."commonName")) = ANY($1)`, now, cns)
 	}
 
 	// Закрываем устаревшие сессии только на узлах, где опрос management прошёл успешно.

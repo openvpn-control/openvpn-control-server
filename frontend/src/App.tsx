@@ -1346,9 +1346,12 @@ function formatUserLastActivityCell(user, nowMs) {
   if (user.activeSessions > 0) {
     return { label: "онлайн", title: "Есть активные VPN-сессии" };
   }
+  if (!user.linkedCertCount) {
+    return { label: "—", title: "Нет привязанных сертификатов" };
+  }
   const raw = user.lastVpnActivityAt;
   if (!raw) {
-    return { label: "—", title: undefined };
+    return { label: "—", title: "Нет зафиксированных VPN-подключений" };
   }
   const end = new Date(raw).getTime();
   if (Number.isNaN(end)) {
@@ -2687,13 +2690,15 @@ export default function App() {
     return vpnUsers
       .map((u) => {
         const certCns = new Set(
-          certificates.filter((c) => c.vpnUserId === u.id && c.commonName).map((c) => c.commonName),
+          certificates
+            .filter((c) => c.vpnUserId === u.id && String(c.commonName || "").trim())
+            .map((c) => String(c.commonName).trim().toLowerCase()),
         );
         let activeSessions = 0;
         let totalInBps = 0;
         let totalOutBps = 0;
         for (const client of clients) {
-          const cn = client.commonName || "";
+          const cn = String(client.commonName || "").trim().toLowerCase();
           if (!cn || !certCns.has(cn)) continue;
           activeSessions += 1;
           totalInBps += Number(client.inBps || 0);
@@ -2938,31 +2943,27 @@ export default function App() {
 
   const userSessionsWireHint = useMemo(() => {
     if (!selectedUserId) return null;
-    const linkedLower = new Set(
-      certificates
-        .filter((c) => c.vpnUserId === selectedUserId && String(c.commonName || "").trim())
-        .map((c) => String(c.commonName).trim().toLowerCase()),
+    const linkedCerts = certificates.filter(
+      (c) => c.vpnUserId === selectedUserId && String(c.commonName || "").trim(),
     );
-    for (const cl of clients) {
-      const cn = String(cl.commonName || "").trim();
-      if (!cn || linkedLower.has(cn.toLowerCase())) continue;
-      const cert = certificates.find(
-        (c) => String(c.commonName || "").trim().toLowerCase() === cn.toLowerCase(),
-      );
-      if (!cert) {
-        return `На сервере активна сессия CN «${cn}», но в панели нет сертификата с таким CN.`;
-      }
-      if (!cert.vpnUserId) {
-        return `На сервере активна сессия CN «${cn}», но сертификат не привязан к пользователю — привяжите его на вкладке «Сертификаты».`;
-      }
-      if (cert.vpnUserId !== selectedUserId) {
-        const other = vpnUsers.find((u) => u.id === cert.vpnUserId);
-        const who = other?.fullName || "другому пользователю";
-        return `CN «${cn}» привязан к ${who}, а не к этому профилю.`;
-      }
+    if (!linkedCerts.length) {
+      return "Нет привязанных сертификатов — выпустите или привяжите сертификат на вкладке «Сертификаты».";
+    }
+    const linkedLower = new Set(linkedCerts.map((c) => String(c.commonName).trim().toLowerCase()));
+    const hasOwnLive = clients.some((cl) => {
+      const cn = String(cl.commonName || "").trim().toLowerCase();
+      return cn && linkedLower.has(cn);
+    });
+    if (hasOwnLive) return null;
+    const missing = linkedCerts.find((cert) => {
+      const cnLower = String(cert.commonName).trim().toLowerCase();
+      return !clients.some((cl) => String(cl.commonName || "").trim().toLowerCase() === cnLower);
+    });
+    if (missing) {
+      return `Сертификат CN «${missing.commonName}» привязан к пользователю, но сейчас нет активной VPN-сессии с этим CN.`;
     }
     return null;
-  }, [selectedUserId, certificates, clients, vpnUsers]);
+  }, [selectedUserId, certificates, clients]);
 
   const selectedUserCertificates = useMemo(() => {
     if (!selectedUserId) return [];
