@@ -243,13 +243,6 @@ func remoteAddrHostOnly(addr string) string {
 	return s
 }
 
-func strVal(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return ""
-}
-
 func bigIntVal(v any) int64 {
 	switch t := v.(type) {
 	case float64:
