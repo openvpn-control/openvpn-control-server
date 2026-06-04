@@ -295,11 +295,30 @@ func ApplyOpenvpnSettingsForPanel(ctx context.Context, pool *pgxpool.Pool, nodeI
 	if err != nil {
 		return mapAgentError(err)
 	}
+	prev, _, _ := loadSettingsRow(ctx, pool, an.ID)
+	if prev == nil {
+		prev = map[string]any{}
+	}
+	incoming, _ := reqBody["settings"].(map[string]any)
+	if incoming == nil {
+		incoming = map[string]any{}
+	}
+	settings := mergeSettings(prev, incoming)
+	ensureOpenvpnSettingsReady(settings)
+	configPath := agentBodyString(applyData, "configPath")
+	var cp *string
+	if configPath != "" {
+		cp = &configPath
+	}
+	if err := upsertSettings(ctx, pool, an.ID, settings, cp); err != nil {
+		return Result{Status: http.StatusInternalServerError, Body: map[string]string{"error": err.Error()}}
+	}
 	return Result{Status: http.StatusOK, Body: map[string]any{
 		"ok":         true,
 		"message":    "Конфигурация записана на агенте, OpenVPN перезапущен.",
 		"output":     agentBodyString(applyData, "output"),
-		"configPath": agentBodyString(applyData, "configPath"),
+		"configPath": configPath,
+		"settings":   settings,
 	}}
 }
 

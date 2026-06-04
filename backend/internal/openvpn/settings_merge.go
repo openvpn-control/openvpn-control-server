@@ -6,7 +6,7 @@ import (
 )
 
 // MergeSettingsForDisplay combines panel DB and agent snapshot (server.conf).
-// База — снимок с агента (файл); непустые значения из БД перекрывают (в т.ч. только что применённые).
+// Директивы OpenVPN: непустое значение с агента (файл) важнее БД; panel* и user/group — из БД.
 func MergeSettingsForDisplay(db, agent map[string]any) map[string]any {
 	if db == nil {
 		db = map[string]any{}
@@ -26,7 +26,10 @@ func MergeSettingsForDisplay(db, agent map[string]any) map[string]any {
 			}
 			continue
 		}
-		if !settingValueIsEmpty(v) {
+		if settingValueIsEmpty(v) {
+			continue
+		}
+		if settingValueIsEmpty(out[k]) {
 			out[k] = v
 		}
 	}

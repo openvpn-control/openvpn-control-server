@@ -3377,7 +3377,10 @@ export default function App() {
         `/api/panel/nodes/${encodeURIComponent(selectedServerId)}/openvpn-settings-apply`,
         "POST",
         tokenRef.current,
-        { rawConfig },
+        {
+          rawConfig,
+          settings: buildOpenVpnSettingsForPanelSave(serverOpenVpnSettings),
+        },
       );
       const output = typeof data?.output === "string" ? data.output.trim() : "";
       setServerOpenVpnApplyLog(output || "(нет вывода)");
@@ -3386,6 +3389,18 @@ export default function App() {
         message: data?.message || "Конфигурация записана, OpenVPN перезапущен.",
       });
       setServerAgentRawConfig(rawConfig);
+      if (data?.settings && typeof data.settings === "object" && !Array.isArray(data.settings)) {
+        const saved = { ...data.settings };
+        for (const f of OPENVPN_SERVER_SETTINGS_FIELDS) {
+          if (f.type === "textarea") {
+            const v = saved[f.key];
+            if (Array.isArray(v)) saved[f.key] = v;
+            else if (typeof v === "string") saved[f.key] = v ? [v] : [];
+            else saved[f.key] = [];
+          }
+        }
+        setServerOpenVpnSettings(saved);
+      }
     } catch (err) {
       const output = typeof err.output === "string" ? err.output.trim() : "";
       setServerOpenVpnApplyLog(output || String(err.message || "Применение не удалось"));
@@ -3402,7 +3417,7 @@ export default function App() {
     } finally {
       setServerOpenVpnApplying(false);
     }
-  }, [selectedServerId, serverOpenVpnConfigDiff]);
+  }, [selectedServerId, serverOpenVpnConfigDiff, serverOpenVpnSettings]);
 
   const saveServerOpenVpnClientSettings = useCallback(async () => {
     if (!selectedServerId || !tokenRef.current) return;
