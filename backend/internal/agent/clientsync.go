@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/segmentio/ksuid"
 
 	"github.com/openvpn-control/openvpn-control-server/backend/internal/config"
 )
