@@ -20,9 +20,7 @@ func normalizeTunnelSetting(settings map[string]any) {
 	if settings == nil {
 		return
 	}
-	if n, ok := numericSettingValue(settings["fragment"]); ok && n == 0 {
-		delete(settings, "fragment")
-	}
+	// fragment 0 храним в БД (отключено); в server.conf не пишется на агенте при сборке/apply.
 	if settingStr(settings, "user") == "" {
 		delete(settings, "user")
 	}
