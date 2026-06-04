@@ -47,6 +47,8 @@ func numericSettingValue(v any) (float64, bool) {
 	switch x := v.(type) {
 	case float64:
 		return x, true
+	case float32:
+		return float64(x), true
 	case int:
 		return float64(x), true
 	case int64:

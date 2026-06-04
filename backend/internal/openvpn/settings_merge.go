@@ -56,27 +56,6 @@ func staleZeroFragmentFromDB(key string, dbVal any, agent map[string]any) bool {
 	return ok && n == 0
 }
 
-func numericSettingValue(v any) (float64, bool) {
-	switch x := v.(type) {
-	case float64:
-		return x, true
-	case float32:
-		return float64(x), true
-	case int:
-		return float64(x), true
-	case int64:
-		return float64(x), true
-	default:
-		s := strings.TrimSpace(fmt.Sprint(v))
-		if s == "" {
-			return 0, false
-		}
-		var f float64
-		_, err := fmt.Sscanf(s, "%f", &f)
-		return f, err == nil
-	}
-}
-
 func settingValueIsEmpty(v any) bool {
 	if v == nil {
 		return true
