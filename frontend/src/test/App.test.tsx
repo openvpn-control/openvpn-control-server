@@ -36,14 +36,27 @@ function mockApiFetch() {
   const nodes = [{ id: "s1", name: "Server 1", status: "ONLINE", host: "127.0.0.1", port: 8081 }];
   const organizations = [{ id: "o1", name: "Org 1" }];
   const users = [{ id: "u1", fullName: "User 1", organizationId: "o1" }];
-  const openvpnSettingsPayload = {
-    versions: [
-      { id: "v1", version: 1, createdAt: "2026-01-01T00:00:00.000Z", settings: { dev: "tun", port: 1194 } },
-      { id: "v2", version: 2, createdAt: "2026-01-02T00:00:00.000Z", settings: { dev: "tun", port: 1195 } },
-    ],
-    activeVersionId: "v1",
-    selectedVersionId: "v2",
+  const openvpnServerSettings = {
+    port: 1194,
+    proto: "udp",
+    dev: "tun0",
+    mode: "server",
+    server: "10.8.0.0 255.255.255.0",
+    topology: "subnet",
+    "data-ciphers": "AES-256-GCM:AES-128-GCM",
+    "tls-version-min": "1.2",
+    verb: 3,
+    mute: 20,
+    "persist-key": true,
+    "persist-tun": true,
+    push: [],
+    route: [],
   };
+  const openvpnSettingsPayload = {
+    settings: openvpnServerSettings,
+    configPath: "/etc/openvpn/server/server.conf",
+  };
+  const openvpnRawConfig = "port 1194\nproto udp\ndev tun0\nmode server\nserver 10.8.0.0 255.255.255.0\n";
 
   return vi.fn((input, init) => {
     const url = String(input || "");
@@ -81,10 +94,20 @@ function mockApiFetch() {
     if (url.includes("/api/vpn-users/u1/firewall")) return jsonResponse({ mode: "merge", rules: [], natRules: [] });
     if (url.includes("/api/vpn-users")) return jsonResponse(users);
     if (url.includes("/api/panel/nodes/s1/openvpn-settings-save")) return jsonResponse({ message: "Настройки сохранены на панели." });
-    if (url.includes("/api/panel/nodes/s1/openvpn-settings-apply")) {
-      return jsonResponse({ ok: true, message: "Конфигурация записана.", output: "ok" });
+    if (url.includes("/api/panel/nodes/s1/openvpn-settings-apply") && method === "POST") {
+      return jsonResponse({
+        ok: true,
+        message: "Конфигурация записана.",
+        output: "ok",
+        settings: { ...openvpnServerSettings, port: 1195 },
+      });
     }
-    if (url.includes("/api/panel/nodes/s1/openvpn-settings")) return jsonResponse(openvpnSettingsPayload);
+    if (url.includes("/api/panel/nodes/s1/openvpn-raw-config")) {
+      return jsonResponse({ rawConfig: openvpnRawConfig, configPath: "/etc/openvpn/server/server.conf" });
+    }
+    if (url.includes("/api/panel/nodes/s1/openvpn-settings") && method === "GET") {
+      return jsonResponse(openvpnSettingsPayload);
+    }
     if (url.includes("/api/panel/nodes/s1/system/network")) {
       return jsonResponse({ interfaces: [{ name: "eth0", addresses: ["192.0.2.10"] }] });
     }
@@ -590,6 +613,9 @@ describe("App UI", () => {
     );
 
     await screen.findByRole("heading", { name: "Служба OpenVPN" });
+    const portInput = getFieldInputByLabelText(/^Порт$/);
+    expect(portInput).toBeTruthy();
+    fireEvent.change(portInput, { target: { value: "1195" } });
     fireEvent.click(await screen.findByRole("button", { name: "Применить" }));
     expect(await screen.findByText("Подтверждение применения")).toBeInTheDocument();
     const modal = screen.getByText("Подтверждение применения").closest(".modal-dialog");
@@ -597,10 +623,15 @@ describe("App UI", () => {
     expect(confirmBtn).toBeTruthy();
     fireEvent.click(confirmBtn);
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/openvpn-settings-apply"),
-        expect.objectContaining({ method: "POST" }),
+      const applyCall = fetchMock.mock.calls.find(
+        (call) =>
+          String(call[0] || "").includes("/openvpn-settings-apply") &&
+          String(call[1]?.method || "GET").toUpperCase() === "POST",
       );
+      expect(applyCall).toBeTruthy();
+      const body = JSON.parse(String(applyCall[1]?.body || "{}"));
+      expect(body.rawConfig).toEqual(expect.stringContaining("port 1195"));
+      expect(body.settings).toEqual(expect.objectContaining({ port: 1195 }));
     });
   });
 });
