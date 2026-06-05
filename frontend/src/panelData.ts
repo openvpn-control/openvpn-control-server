@@ -103,7 +103,7 @@ export function panelDataRouteKey(route: AppRouteState): string {
 
 function userProfileKeys(tab: string): PanelDataKey[] {
   if (tab === "certs" || tab === "vpn") {
-    return ["vpnUsers", "certificates"];
+    return ["vpnUsers", "certificates", "rootCAs"];
   }
   if (tab === "ccd" || tab === "firewall") {
     return ["vpnUsers", "organizations"];
@@ -163,7 +163,7 @@ export function panelDataKeysForRoute(route: AppRouteState): PanelDataKey[] {
       return ["vpnUsers", "clients", "certificates"];
     }
     if (route.usersSub === "add") {
-      return [];
+      return ["rootCAs"];
     }
     if (route.usersSub === "profile") {
       return userProfileKeys(route.userProfileTab);

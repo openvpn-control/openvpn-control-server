@@ -165,7 +165,7 @@ func (h *VpnUsers) Patch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *VpnUsers) IssueCertServers(w http.ResponseWriter, r *http.Request) {
-	raw, err := listIssueServers(r.Context(), h.Pool)
+	raw, err := issueServersJSON(r.Context(), h.Pool)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -339,7 +339,7 @@ func (h *VpnUsers) ProfileOptions(w http.ResponseWriter, r *http.Request) {
 			safe = append(safe, c)
 		}
 	}
-	servers, _ := listIssueServers(r.Context(), h.Pool)
+	servers, _ := issueServersJSON(r.Context(), h.Pool)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"certificates": safe, "servers": json.RawMessage(servers), "defaultEmail": email,
 	})
@@ -489,6 +489,51 @@ func listIssueServers(ctx context.Context, pool *pgxpool.Pool) ([]byte, error) {
 			LEFT JOIN "AgentNode" n ON n.id = s."agentNodeId"
 		) s`).Scan(&raw)
 	return raw, err
+}
+
+func issueServersJSON(ctx context.Context, pool *pgxpool.Pool) ([]byte, error) {
+	raw, err := listIssueServers(ctx, pool)
+	if err != nil {
+		return nil, err
+	}
+	enriched, enrichErr := enrichIssueServersWithRootExpiry(ctx, pool, raw)
+	if enrichErr != nil {
+		return raw, nil
+	}
+	return enriched, nil
+}
+
+func enrichIssueServersWithRootExpiry(ctx context.Context, pool *pgxpool.Pool, raw []byte) ([]byte, error) {
+	var servers []map[string]any
+	if err := json.Unmarshal(raw, &servers); err != nil {
+		return nil, err
+	}
+	expiryByRoot := map[string]*time.Time{}
+	for _, s := range servers {
+		rid := strings.TrimSpace(strAny(s["panelRootCaId"]))
+		if rid == "" {
+			continue
+		}
+		if _, seen := expiryByRoot[rid]; seen {
+			continue
+		}
+		var pem string
+		if err := pool.QueryRow(ctx, `SELECT "certPem" FROM "RootCertificateAuthority" WHERE id = $1`, rid).Scan(&pem); err != nil {
+			expiryByRoot[rid] = nil
+			continue
+		}
+		expiryByRoot[rid] = cert.PemExpiryISO(pem)
+	}
+	for _, s := range servers {
+		rid := strings.TrimSpace(strAny(s["panelRootCaId"]))
+		if rid == "" {
+			continue
+		}
+		if t := expiryByRoot[rid]; t != nil {
+			s["panelRootCaExpiresAt"] = t.UTC().Format(time.RFC3339)
+		}
+	}
+	return json.Marshal(servers)
 }
 
 func sendProfileEmail(to, fileName, content string) error {

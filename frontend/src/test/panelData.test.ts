@@ -27,14 +27,14 @@ describe("panelDataKeysForRoute", () => {
     expect(keys).not.toContain("overview");
   });
 
-  it("does not poll on user add form", () => {
+  it("polls root CAs on user add form for cert validity cap", () => {
     const keys = panelDataKeysForRoute(parseAppRoute("/users/new", ""));
-    expect(keys).toEqual([]);
+    expect(keys).toEqual(["rootCAs"]);
   });
 
   it("polls profile tab-specific keys", () => {
     const keys = panelDataKeysForRoute(parseAppRoute("/users/u1", "?tab=certs"));
-    expect(keys).toEqual(["vpnUsers", "certificates"]);
+    expect(keys).toEqual(["vpnUsers", "certificates", "rootCAs"]);
   });
 
   it("polls admins only on settings admins", () => {

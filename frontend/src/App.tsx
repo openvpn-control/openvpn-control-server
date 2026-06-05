@@ -1135,6 +1135,34 @@ function daysRemainingUntil(iso) {
   return Math.max(0, Math.ceil((t - Date.now()) / 86400000));
 }
 
+/** ISO-дата окончания корневого CA из списка CA или строки сервера API. */
+function rootCaExpiresAtIso(rootCa, serverRow) {
+  const fromCa = rootCa?.expiresAt || rootCa?.validTo;
+  if (fromCa) return fromCa;
+  return serverRow?.panelRootCaExpiresAt || null;
+}
+
+/** Подсказка и лимит срока выпуска: leaf не может жить дольше корневого CA. */
+function certValidityDaysLimitPresentation(maxDays, rootCaExpiresAtIso) {
+  const cap = Math.max(0, maxDays);
+  if (cap < 1) {
+    return {
+      cap: 0,
+      hint:
+        "Корневой сертификат не выбран, срок неизвестен или уже истёк. Создайте новый корневой CA или привяжите действующий на сервере.",
+      disabled: true,
+    };
+  }
+  const expiresLabel = formatExactRuDateTime(rootCaExpiresAtIso);
+  return {
+    cap,
+    hint: expiresLabel
+      ? `Срок не может быть дольше корневого CA (действует до ${expiresLabel}): максимум ${cap} сут.`
+      : `Срок не может превышать оставшееся время корневого CA: максимум ${cap} сут.`,
+    disabled: false,
+  };
+}
+
 function formatExactRuDateTime(value) {
   if (value == null || value === "") return "";
   const date = value instanceof Date ? value : new Date(value);
@@ -2809,10 +2837,14 @@ export default function App() {
     }
     return selectedCertId || "";
   }, [primaryNav, serversView, serverDetailTab, serverCenterSelectedCert?.id, selectedCertId]);
+  const serverPanelRootCaExpiresAt = useMemo(
+    () => rootCaExpiresAtIso(serverPanelRootCa, null) || serverRootCaSummary?.data?.validTo || null,
+    [serverPanelRootCa, serverRootCaSummary?.data?.validTo],
+  );
   const keysMaxServerCertValidityDays = useMemo(() => {
-    const d = daysRemainingUntil(serverPanelRootCa?.expiresAt);
+    const d = daysRemainingUntil(serverPanelRootCaExpiresAt);
     return Math.min(3650, Math.max(0, d));
-  }, [serverPanelRootCa?.expiresAt]);
+  }, [serverPanelRootCaExpiresAt]);
   const serverOpenVpnDraftRaw = useMemo(
     () => fallbackRawFromSettings(serverOpenVpnSettings),
     [serverOpenVpnSettings],
@@ -3038,10 +3070,14 @@ export default function App() {
     () => rootCAs.find((r) => r.id === userCertBindServerRootCaId) || null,
     [rootCAs, userCertBindServerRootCaId],
   );
+  const userProfileIssueRootCaExpiresAt = useMemo(
+    () => rootCaExpiresAtIso(userProfileIssueRootCa, userCertBindServer),
+    [userProfileIssueRootCa, userCertBindServer],
+  );
   const userProfileIssueMaxCertValidityDays = useMemo(() => {
-    const d = daysRemainingUntil(userProfileIssueRootCa?.expiresAt);
+    const d = daysRemainingUntil(userProfileIssueRootCaExpiresAt);
     return Math.min(3650, Math.max(0, d));
-  }, [userProfileIssueRootCa?.expiresAt]);
+  }, [userProfileIssueRootCaExpiresAt]);
   const userModalBindableCertificates = useMemo(() => {
     if (!userCertBindServerRootCaId) return [];
     return selectedUserUnlinkedCertificates
@@ -3076,10 +3112,22 @@ export default function App() {
     () => rootCAs.find((r) => r.id === newUserCertRootCaId) || null,
     [rootCAs, newUserCertRootCaId],
   );
+  const newUserRootCaExpiresAt = useMemo(
+    () => rootCaExpiresAtIso(newUserSelectedRootCa, newUserSelectedIssueServer),
+    [newUserSelectedRootCa, newUserSelectedIssueServer],
+  );
   const newUserMaxCertValidityDays = useMemo(() => {
-    const d = daysRemainingUntil(newUserSelectedRootCa?.expiresAt);
+    const d = daysRemainingUntil(newUserRootCaExpiresAt);
     return Math.min(3650, Math.max(0, d));
-  }, [newUserSelectedRootCa?.expiresAt]);
+  }, [newUserRootCaExpiresAt]);
+  const newUserCertValidityLimit = useMemo(
+    () => certValidityDaysLimitPresentation(newUserMaxCertValidityDays, newUserRootCaExpiresAt),
+    [newUserMaxCertValidityDays, newUserRootCaExpiresAt],
+  );
+  const userProfileIssueCertValidityLimit = useMemo(
+    () => certValidityDaysLimitPresentation(userProfileIssueMaxCertValidityDays, userProfileIssueRootCaExpiresAt),
+    [userProfileIssueMaxCertValidityDays, userProfileIssueRootCaExpiresAt],
+  );
 
   const userProfileSessionsSorted = useMemo(() => {
     return [...userProfileSessions].sort((a, b) => {
@@ -10207,11 +10255,13 @@ export default function App() {
                           <input
                             type="number"
                             min={1}
-                            max={Math.max(1, newUserMaxCertValidityDays)}
+                            max={newUserCertValidityLimit.cap > 0 ? newUserCertValidityLimit.cap : undefined}
                             value={newUserCertValidityDays}
                             onChange={(e) => setNewUserCertValidityDays(e.target.value)}
                             placeholder="1825"
+                            disabled={newUserCertValidityLimit.disabled}
                           />
+                          <p className="user-profile-field-hint">{newUserCertValidityLimit.hint}</p>
                         </div>
                       </>
                     ) : null}
@@ -11283,12 +11333,19 @@ export default function App() {
                             <input
                               type="number"
                               min={1}
+                              max={
+                                userProfileIssueCertValidityLimit.cap > 0
+                                  ? userProfileIssueCertValidityLimit.cap
+                                  : undefined
+                              }
                               value={profileIssueCert.validityDays}
                               onChange={(e) =>
                                 setProfileIssueCert((prev) => ({ ...prev, validityDays: e.target.value }))
                               }
                               style={{ width: "100%", maxWidth: 280, minWidth: 0 }}
+                              disabled={userProfileIssueCertValidityLimit.disabled}
                             />
+                            <p className="user-profile-field-hint">{userProfileIssueCertValidityLimit.hint}</p>
                           </div>
                           <div className="row-inline" style={{ justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
                             <button
@@ -14027,7 +14084,7 @@ export default function App() {
                   <input
                     type="number"
                     min={1}
-                    max={Math.max(1, keysMaxServerCertValidityDays)}
+                    max={keysMaxServerCertValidityDays > 0 ? keysMaxServerCertValidityDays : undefined}
                     value={srvCertCreateModal.validityDays}
                     onChange={(e) => {
                       const raw = Math.floor(Number(e.target.value) || 0);
@@ -14038,7 +14095,7 @@ export default function App() {
                       }));
                     }}
                     style={{ width: "100%", maxWidth: "100%", minWidth: 0 }}
-                    disabled={srvCertCreateModal.busy}
+                    disabled={srvCertCreateModal.busy || keysMaxServerCertValidityDays < 1}
                   />
                 </div>
                 {srvCertCreateModal.error ? (
